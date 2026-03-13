@@ -225,16 +225,12 @@ local function acquireTab(index)
     btn.pinBtn = CreateFrame("Button", nil, btn)
     btn.pinBtn:SetSize(18, 18)
     btn.pinBtn:SetPoint("LEFT", btn, "LEFT", 7, 0)
-    btn.pinBtn:SetBackdrop({
-        bgFile = "Interface/Buttons/WHITE8x8",
-        edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-        tile = true,
-        tileSize = 8,
-        edgeSize = 8,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    btn.pinBtn:SetBackdropColor(0.12, 0.08, 0.08, 0.95)
-    btn.pinBtn:SetBackdropBorderColor(0.48, 0.34, 0.20, 0.85)
+    btn.pinBtn.bg = btn.pinBtn:CreateTexture(nil, "BACKGROUND")
+    btn.pinBtn.bg:SetAllPoints(btn.pinBtn)
+    btn.pinBtn.bg:SetColorTexture(0.12, 0.08, 0.08, 0.95)
+    btn.pinBtn.border = btn.pinBtn:CreateTexture(nil, "BORDER")
+    btn.pinBtn.border:SetAllPoints(btn.pinBtn)
+    btn.pinBtn.border:SetColorTexture(0.48, 0.34, 0.20, 0.55)
     btn.pinBtn.icon = btn.pinBtn:CreateTexture(nil, "OVERLAY")
     btn.pinBtn.icon:SetAllPoints(btn.pinBtn)
     btn.pinBtn.icon:SetTexture(PIN_ICON_UNLOCKED)
@@ -497,12 +493,12 @@ refreshSideTabs = function()
         end
         if isPinned then
             btn.pinBtn.icon:SetVertexColor(1, 0.92, 0.35, 1)
-            btn.pinBtn:SetBackdropColor(0.18, 0.14, 0.08, 0.98)
-            btn.pinBtn:SetBackdropBorderColor(0.82, 0.64, 0.22, 0.98)
+            btn.pinBtn.bg:SetColorTexture(0.18, 0.14, 0.08, 0.98)
+            btn.pinBtn.border:SetColorTexture(0.82, 0.64, 0.22, 0.80)
         else
             btn.pinBtn.icon:SetVertexColor(0.88, 0.88, 0.88, 0.95)
-            btn.pinBtn:SetBackdropColor(0.12, 0.08, 0.08, 0.95)
-            btn.pinBtn:SetBackdropBorderColor(0.48, 0.34, 0.20, 0.85)
+            btn.pinBtn.bg:SetColorTexture(0.12, 0.08, 0.08, 0.95)
+            btn.pinBtn.border:SetColorTexture(0.48, 0.34, 0.20, 0.55)
         end
 
         y = y - 30
