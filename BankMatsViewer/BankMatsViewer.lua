@@ -254,6 +254,20 @@ local QUALITY_SORT = {
     ["Unknown"] = 7,
 }
 
+local MATERIAL_SORT = {
+    ["Cloth"] = 1,
+    ["Herbs"] = 2,
+    ["Metals and Stone"] = 3,
+    ["Leather"] = 4,
+    ["Enchantment"] = 5,
+    ["Pigments and Ink"] = 6,
+    ["Gems"] = 7,
+    ["Parts"] = 8,
+    ["Elemental"] = 9,
+    ["Cooking"] = 10,
+    ["Other Reagents"] = 11,
+}
+
 local ui = {
     frame = nil,
     summaryText = nil,
@@ -560,6 +574,8 @@ local function buildRowsFromLookup(itemsTable, catalogLookup)
                 qualitySort = QUALITY_SORT[quality] or 99,
                 profession = professionLabel,
                 materialType = materialType,
+                materialSort = MATERIAL_SORT[materialType] or 99,
+                reagentQualitySort = (reagentQualityInfo and reagentQualityInfo.quality) or 99,
                 groupKey = professionLabel .. "||" .. materialType,
             }
         end
@@ -569,11 +585,14 @@ local function buildRowsFromLookup(itemsTable, catalogLookup)
         if a.expansionSort ~= b.expansionSort then
             return a.expansionSort < b.expansionSort
         end
+        if a.materialSort ~= b.materialSort then
+            return a.materialSort < b.materialSort
+        end
+        if a.reagentQualitySort ~= b.reagentQualitySort then
+            return a.reagentQualitySort < b.reagentQualitySort
+        end
         if a.qualitySort ~= b.qualitySort then
             return a.qualitySort < b.qualitySort
-        end
-        if a.groupKey ~= b.groupKey then
-            return a.groupKey < b.groupKey
         end
         if a.name == b.name then
             return a.itemID < b.itemID
@@ -838,8 +857,35 @@ local function refreshWindow()
             y = y - 4
         else
             local col = 0
+            local currentMaterial = nil
+            local currentTier = nil
 
             for _, row in ipairs(expansionRows) do
+                local rowTier = row.reagentQualityTier or 0
+
+                if row.materialType ~= currentMaterial then
+                    if col > 0 then
+                        y = y - cell
+                        col = 0
+                    end
+                    currentMaterial = row.materialType
+                    currentTier = nil
+                    emitHeader("  Material: " .. currentMaterial, 0.72, 0.88, 0.98)
+                end
+
+                if rowTier ~= currentTier then
+                    if col > 0 then
+                        y = y - cell
+                        col = 0
+                    end
+                    currentTier = rowTier
+                    if rowTier > 0 then
+                        emitHeader("    Reagent Tier: " .. tostring(rowTier), 0.92, 0.86, 0.42)
+                    else
+                        emitHeader("    Reagent Tier: Standard", 0.65, 0.72, 0.8)
+                    end
+                end
+
                 buttonIndex = buttonIndex + 1
                 local btn = acquireItemButton(buttonIndex)
                 local x = 8 + (col * cell)
@@ -859,7 +905,7 @@ local function refreshWindow()
                 btn.reagentQualityTier = row.reagentQualityTier
                 btn.reagentQualityIconInventory = row.reagentQualityIconInventory
                 btn.reagentQualityIconSmall = row.reagentQualityIconSmall
-                btn.groupLabel = row.profession .. " / " .. row.materialType
+                btn.groupLabel = row.materialType
 
                 if row.reagentQualityTier and row.reagentQualityTier > 0 then
                     if row.reagentQualityIconInventory and btn.qualityBadge.SetAtlas then
