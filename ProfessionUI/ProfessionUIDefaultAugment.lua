@@ -450,62 +450,52 @@ end
 local function getProfessionSwitchEntries()
     local entries = {}
 
-    if not (C_TradeSkillUI and C_TradeSkillUI.GetAllProfessionTradeSkillLines and C_TradeSkillUI.GetProfessionInfoBySkillLineID) then
+    if not (GetProfessions and GetProfessionInfo) then
         return entries
     end
 
-    local lines = C_TradeSkillUI.GetAllProfessionTradeSkillLines()
-    if type(lines) ~= "table" then
-        return entries
-    end
-
-    local learnedBySkillLine = {}
-    local learnedByName = {}
-    if GetProfessions and GetProfessionInfo then
-        local prof1, prof2, archaeology, fishing, cooking = GetProfessions()
-        for _, profIndex in ipairs({ prof1, prof2, cooking, fishing, archaeology }) do
-            if profIndex then
-                local name, _, _, _, _, _, skillLine = GetProfessionInfo(profIndex)
-                if type(skillLine) == "number" then
-                    learnedBySkillLine[skillLine] = true
-                end
-                if type(name) == "string" and name ~= "" then
-                    learnedByName[string.lower(name)] = true
-                end
-            end
-        end
-    end
-
-    local seen = {}
-    for _, skillLineID in ipairs(lines) do
-        if type(skillLineID) == "number" then
-            local info = C_TradeSkillUI.GetProfessionInfoBySkillLineID(skillLineID)
-            if type(info) == "table" and info.parentProfessionID == nil then
-                local professionID = info.professionID
-                local professionName = info.professionName or info.skillLineName or ""
-                local isLearned = false
-                if type(professionID) == "number" and learnedBySkillLine[professionID] then
-                    isLearned = true
-                elseif type(professionName) == "string" and professionName ~= "" and learnedByName[string.lower(professionName)] then
-                    isLearned = true
-                end
-
-                if isLearned and type(professionID) == "number" and not seen[professionID] then
-                    seen[professionID] = true
-                    local section = "Primary"
-                    if professionID == 185 or professionID == 356 or professionID == ARCHAEOLOGY_SKILL_LINE_ID then
-                        section = "Secondary"
+    local rootSkillLineByProfessionID = {}
+    if C_TradeSkillUI and C_TradeSkillUI.GetAllProfessionTradeSkillLines and C_TradeSkillUI.GetProfessionInfoBySkillLineID then
+        local lines = C_TradeSkillUI.GetAllProfessionTradeSkillLines()
+        if type(lines) == "table" then
+            for _, lineSkillLineID in ipairs(lines) do
+                if type(lineSkillLineID) == "number" then
+                    local info = C_TradeSkillUI.GetProfessionInfoBySkillLineID(lineSkillLineID)
+                    if type(info) == "table" and info.parentProfessionID == nil and type(info.professionID) == "number" then
+                        rootSkillLineByProfessionID[info.professionID] = lineSkillLineID
                     end
-                    entries[#entries + 1] = {
-                        professionID = professionID,
-                        skillLineID = skillLineID,
-                        label = professionName ~= "" and professionName or tostring(skillLineID),
-                        section = section,
-                    }
                 end
             end
         end
     end
+
+    local seenByProfessionID = {}
+    local function addEntry(profIndex, section)
+        if not profIndex then
+            return
+        end
+
+        local name, _, _, _, _, _, professionID = GetProfessionInfo(profIndex)
+        if type(professionID) ~= "number" or seenByProfessionID[professionID] then
+            return
+        end
+        seenByProfessionID[professionID] = true
+
+        local skillLineID = rootSkillLineByProfessionID[professionID] or professionID
+        entries[#entries + 1] = {
+            professionID = professionID,
+            skillLineID = skillLineID,
+            label = (type(name) == "string" and name ~= "") and name or tostring(professionID),
+            section = section,
+        }
+    end
+
+    local prof1, prof2, archaeology, fishing, cooking = GetProfessions()
+    addEntry(prof1, "Primary")
+    addEntry(prof2, "Primary")
+    addEntry(cooking, "Secondary")
+    addEntry(fishing, "Secondary")
+    addEntry(archaeology, "Secondary")
 
     table.sort(entries, function(a, b)
         if (a.section or "") ~= (b.section or "") then
