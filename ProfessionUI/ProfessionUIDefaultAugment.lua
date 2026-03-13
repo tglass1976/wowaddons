@@ -13,6 +13,7 @@ end
 local ui = {
     panel = nil,
     title = nil,
+    subtitle = nil,
     tabs = {},
     hooksInstalled = false,
     pinAppliedForProfessionID = nil,
@@ -115,6 +116,20 @@ local function clearPinnedExpansion(professionID)
     storage[tostring(professionID)] = nil
 end
 
+local function clearAllPinnedExpansions()
+    local storage = getPinStorage()
+    if type(storage) ~= "table" then
+        return 0
+    end
+
+    local removed = 0
+    for key in pairs(storage) do
+        storage[key] = nil
+        removed = removed + 1
+    end
+    return removed
+end
+
 local function getExpansionEntriesForCurrentProfession()
     local entries = {}
 
@@ -183,8 +198,25 @@ local function acquireTab(index)
         return btn
     end
 
-    btn = CreateFrame("Button", nil, ui.panel, "UIPanelButtonTemplate")
+    btn = CreateFrame("Button", nil, ui.panel, "BackdropTemplate")
     btn:SetSize(196, 22)
+    btn:SetBackdrop({
+        bgFile = "Interface/Buttons/WHITE8x8",
+        edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+        tile = true,
+        tileSize = 8,
+        edgeSize = 10,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    btn:SetBackdropColor(0.24, 0.06, 0.06, 0.85)
+    btn:SetBackdropBorderColor(0.55, 0.16, 0.16, 0.95)
+    btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    btn.label:SetPoint("LEFT", btn, "LEFT", 8, 0)
+    btn.label:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
+    btn.label:SetJustifyH("LEFT")
+    btn.highlight = btn:CreateTexture(nil, "HIGHLIGHT")
+    btn.highlight:SetAllPoints(btn)
+    btn.highlight:SetColorTexture(1, 0.85, 0.2, 0.10)
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     btn:SetScript("OnClick", function(self, mouseButton)
         if not self.skillLineID then
@@ -222,6 +254,20 @@ local function acquireTab(index)
         C_Timer.After(0, refreshSideTabs)
     end)
 
+    btn:SetScript("OnEnter", function(self)
+        if not self.isSelected then
+            self:SetBackdropColor(0.30, 0.08, 0.08, 0.9)
+        end
+    end)
+
+    btn:SetScript("OnLeave", function(self)
+        if self.isSelected then
+            self:SetBackdropColor(0.36, 0.12, 0.12, 0.95)
+        else
+            self:SetBackdropColor(0.24, 0.06, 0.06, 0.85)
+        end
+    end)
+
     ui.tabs[index] = btn
     return btn
 end
@@ -257,8 +303,16 @@ local function ensurePanel()
     title:SetJustifyH("LEFT")
     title:SetText("Expansions")
 
+    local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
+    subtitle:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -10, -12)
+    subtitle:SetJustifyH("LEFT")
+    subtitle:SetText("R-click to pin")
+    subtitle:SetTextColor(0.78, 0.78, 0.68)
+
     ui.panel = panel
     ui.title = title
+    ui.subtitle = subtitle
 
     return panel
 end
@@ -314,7 +368,7 @@ refreshSideTabs = function()
         ui.pinAppliedForProfessionID = nil
     end
 
-    local y = -34
+    local y = -44
     for i, entry in ipairs(entries) do
         local btn = acquireTab(i)
         btn:ClearAllPoints()
@@ -329,17 +383,22 @@ refreshSideTabs = function()
         if isPinned then
             label = "[P] " .. label
         end
-        btn:SetText(label)
+        btn.label:SetText(label)
         btn.skillLineID = entry.skillLineID
         btn.expansionName = entry.expansionName
         btn.baseProfessionID = baseProfessionID
         btn.isPinned = isPinned
 
         local isSelected = (currentChildSkillLineID == entry.skillLineID)
+        btn.isSelected = isSelected
         if isSelected then
-            btn:GetFontString():SetTextColor(1, 0.92, 0.35)
+            btn.label:SetTextColor(1, 0.92, 0.35)
+            btn:SetBackdropColor(0.36, 0.12, 0.12, 0.95)
+            btn:SetBackdropBorderColor(0.78, 0.58, 0.18, 0.95)
         else
-            btn:GetFontString():SetTextColor(1, 1, 1)
+            btn.label:SetTextColor(0.95, 0.95, 0.95)
+            btn:SetBackdropColor(0.24, 0.06, 0.06, 0.85)
+            btn:SetBackdropBorderColor(0.55, 0.16, 0.16, 0.95)
         end
 
         y = y - 26
@@ -384,3 +443,26 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
 
     C_Timer.After(0, refreshSideTabs)
 end)
+
+SLASH_PROFESSIONUIPINS1 = "/puipins"
+SLASH_PROFESSIONUIPINS2 = "/puiclearpins"
+SlashCmdList["PROFESSIONUIPINS"] = function(msg)
+    local arg = string.lower(strtrim(msg or ""))
+    if arg == "" or arg == "help" then
+        print("|cff33ff99ProfessionUI pins:|r")
+        print("  /puipins clear      - Clear all saved expansion pins")
+        print("  /puiclearpins       - Alias for /puipins clear")
+        print("  Tip: Right-click any expansion side tab to pin/unpin it")
+        return
+    end
+
+    if arg == "clear" then
+        local removed = clearAllPinnedExpansions()
+        ui.pinAppliedForProfessionID = nil
+        C_Timer.After(0, refreshSideTabs)
+        print("|cff33ff99ProfessionUI:|r Cleared " .. tostring(removed) .. " saved pin(s).")
+        return
+    end
+
+    print("|cffff6666ProfessionUI:|r Unknown pins command. Use /puipins help")
+end
