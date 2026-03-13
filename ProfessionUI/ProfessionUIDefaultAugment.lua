@@ -205,7 +205,7 @@ local function acquireTab(index)
     end
 
     btn = CreateFrame("Button", nil, ui.panel, "BackdropTemplate")
-    btn:SetSize(196, 22)
+    btn:SetSize(228, 26)
     btn:SetBackdrop({
         bgFile = "Interface/Buttons/WHITE8x8",
         edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -223,12 +223,22 @@ local function acquireTab(index)
     btn.leftAccent:SetWidth(2)
     btn.leftAccent:Hide()
     btn.pinBtn = CreateFrame("Button", nil, btn)
-    btn.pinBtn:SetSize(14, 14)
-    btn.pinBtn:SetPoint("LEFT", btn, "LEFT", 8, 0)
+    btn.pinBtn:SetSize(18, 18)
+    btn.pinBtn:SetPoint("LEFT", btn, "LEFT", 7, 0)
+    btn.pinBtn:SetBackdrop({
+        bgFile = "Interface/Buttons/WHITE8x8",
+        edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+        tile = true,
+        tileSize = 8,
+        edgeSize = 8,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    btn.pinBtn:SetBackdropColor(0.12, 0.08, 0.08, 0.95)
+    btn.pinBtn:SetBackdropBorderColor(0.48, 0.34, 0.20, 0.85)
     btn.pinBtn.icon = btn.pinBtn:CreateTexture(nil, "OVERLAY")
     btn.pinBtn.icon:SetAllPoints(btn.pinBtn)
     btn.pinBtn.icon:SetTexture(PIN_ICON_UNLOCKED)
-    btn.pinBtn.icon:SetVertexColor(0.84, 0.84, 0.84, 0.9)
+    btn.pinBtn.icon:SetVertexColor(0.88, 0.88, 0.88, 0.95)
     btn.pinBtn:SetScript("OnClick", function(pinButton)
         local owner = pinButton:GetParent()
         if not owner or not owner.baseProfessionID or not owner.expansionName then
@@ -262,9 +272,10 @@ local function acquireTab(index)
         GameTooltip:Hide()
     end)
     btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    btn.label:SetPoint("LEFT", btn, "LEFT", 26, 0)
+    btn.label:SetPoint("LEFT", btn, "LEFT", 32, 0)
     btn.label:SetPoint("RIGHT", btn, "RIGHT", -62, 0)
     btn.label:SetJustifyH("LEFT")
+    btn.label:SetWordWrap(false)
     btn.rankText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     btn.rankText:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
     btn.rankText:SetJustifyH("RIGHT")
@@ -328,7 +339,7 @@ local function ensurePanel()
     end
 
     local panel = CreateFrame("Frame", "ProfessionUIExpansionSideTabs", professionsFrame, "BackdropTemplate")
-    panel:SetWidth(206)
+    panel:SetWidth(238)
     panel:SetPoint("TOPLEFT", professionsFrame, "TOPRIGHT", 0, 0)
     panel:SetPoint("BOTTOMLEFT", professionsFrame, "BOTTOMRIGHT", 0, 0)
     panel:SetFrameStrata(professionsFrame:GetFrameStrata())
@@ -443,7 +454,7 @@ refreshSideTabs = function()
         ui.pinAppliedForProfessionID = nil
     end
 
-    local y = -44
+    local y = -48
     for i, entry in ipairs(entries) do
         local btn = acquireTab(i)
         btn:ClearAllPoints()
@@ -456,9 +467,6 @@ refreshSideTabs = function()
             rankLabel = string.format("%d/%d", entry.rank or 0, entry.maxRank)
         end
         local isPinned = (pinnedExpansion ~= nil and pinnedExpansion == entry.expansionName)
-        if isPinned then
-            label = "[P] " .. label
-        end
         btn.label:SetText(label)
         btn.rankText:SetText(rankLabel)
         btn.skillLineID = entry.skillLineID
@@ -489,11 +497,15 @@ refreshSideTabs = function()
         end
         if isPinned then
             btn.pinBtn.icon:SetVertexColor(1, 0.92, 0.35, 1)
+            btn.pinBtn:SetBackdropColor(0.18, 0.14, 0.08, 0.98)
+            btn.pinBtn:SetBackdropBorderColor(0.82, 0.64, 0.22, 0.98)
         else
-            btn.pinBtn.icon:SetVertexColor(0.84, 0.84, 0.84, 0.9)
+            btn.pinBtn.icon:SetVertexColor(0.88, 0.88, 0.88, 0.95)
+            btn.pinBtn:SetBackdropColor(0.12, 0.08, 0.08, 0.95)
+            btn.pinBtn:SetBackdropBorderColor(0.48, 0.34, 0.20, 0.85)
         end
 
-        y = y - 26
+        y = y - 30
     end
 
     for i = #entries + 1, #ui.tabs do
