@@ -497,15 +497,22 @@ local function openArchaeologyInProfessionsUI()
         opened = ok and (result == true)
     end
 
-    if opened then
-        if _G.ArchaeologyFrame and _G.ArchaeologyFrame.IsShown and _G.ArchaeologyFrame:IsShown() then
-            _G.ArchaeologyFrame:Hide()
-        end
-        ui.pinAppliedForProfessionID = nil
-        C_Timer.After(0, refreshSideTabs)
+    if not opened then
+        return false
     end
 
-    return opened
+    local professionsShown = (_G.ProfessionsFrame and _G.ProfessionsFrame.IsShown and _G.ProfessionsFrame:IsShown()) or false
+    if not professionsShown then
+        return false
+    end
+
+    if _G.ArchaeologyFrame and _G.ArchaeologyFrame.IsShown and _G.ArchaeologyFrame:IsShown() then
+        _G.ArchaeologyFrame:Hide()
+    end
+    ui.pinAppliedForProfessionID = nil
+    C_Timer.After(0, refreshSideTabs)
+
+    return true
 end
 
 local function installArchaeologyRedirect()
