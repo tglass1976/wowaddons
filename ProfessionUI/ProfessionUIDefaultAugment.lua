@@ -14,6 +14,7 @@ local ui = {
     panel = nil,
     title = nil,
     subtitle = nil,
+    professionButtons = {},
     joinSeam = nil,
     topSeam = nil,
     bottomSeam = nil,
@@ -445,6 +446,140 @@ local function switchProfessionSkillLine(skillLineID, isChildSkillLine)
     return false
 end
 
+local function getProfessionSwitchEntries()
+    local entries = {}
+
+    if not (C_TradeSkillUI and C_TradeSkillUI.GetAllProfessionTradeSkillLines and C_TradeSkillUI.GetProfessionInfoBySkillLineID) then
+        return entries
+    end
+
+    local lines = C_TradeSkillUI.GetAllProfessionTradeSkillLines()
+    if type(lines) ~= "table" then
+        return entries
+    end
+
+    local seen = {}
+    for _, skillLineID in ipairs(lines) do
+        if type(skillLineID) == "number" then
+            local info = C_TradeSkillUI.GetProfessionInfoBySkillLineID(skillLineID)
+            if type(info) == "table" and info.parentProfessionID == nil then
+                local professionID = info.professionID
+                if type(professionID) == "number" and not seen[professionID] then
+                    seen[professionID] = true
+                    entries[#entries + 1] = {
+                        professionID = professionID,
+                        skillLineID = skillLineID,
+                        label = info.professionName or info.skillLineName or tostring(skillLineID),
+                    }
+                end
+            end
+        end
+    end
+
+    table.sort(entries, function(a, b)
+        return (a.label or "") < (b.label or "")
+    end)
+
+    return entries
+end
+
+local function acquireProfessionButton(index)
+    local btn = ui.professionButtons[index]
+    if btn then
+        btn:Show()
+        return btn
+    end
+
+    btn = CreateFrame("Button", nil, ui.panel, "BackdropTemplate")
+    btn:SetSize(70, 18)
+    btn:SetBackdrop({
+        bgFile = "Interface/Buttons/WHITE8x8",
+        edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+        tile = true,
+        tileSize = 8,
+        edgeSize = 10,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    btn:SetBackdropColor(0.16, 0.10, 0.10, 0.90)
+    btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
+    btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    btn.text:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    btn.text:SetJustifyH("CENTER")
+    btn.text:SetWordWrap(false)
+
+    btn:SetScript("OnClick", function(self)
+        if not self.skillLineID then
+            return
+        end
+        ui.pinAppliedForProfessionID = nil
+        switchProfessionSkillLine(self.skillLineID, false)
+        C_Timer.After(0, refreshSideTabs)
+    end)
+
+    btn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(self.fullLabel or self:GetText() or "Profession", 1, 0.92, 0.35)
+        GameTooltip:AddLine("Switch to this profession without reopening the window.", 0.9, 0.9, 0.9, true)
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    ui.professionButtons[index] = btn
+    return btn
+end
+
+local function refreshProfessionSwitcher(activeContext)
+    local entries = getProfessionSwitchEntries()
+    local columns = 3
+    local x = 8
+    local y = -48
+
+    for i = 1, #entries do
+        local entry = entries[i]
+        local btn = acquireProfessionButton(i)
+        local col = (i - 1) % columns
+        local row = math.floor((i - 1) / columns)
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", ui.panel, "TOPLEFT", x + (col * 76), y - (row * 20))
+        btn:SetPoint("TOPRIGHT", ui.panel, "TOPLEFT", x + (col * 76) + 72, y - (row * 20))
+
+        local label = tostring(entry.label or "")
+        if string.len(label) > 10 then
+            label = string.sub(label, 1, 9) .. "..."
+        end
+        btn.text:SetText(label)
+        btn.fullLabel = entry.label
+        btn.skillLineID = entry.skillLineID
+
+        local isActive = false
+        if type(activeContext) == "table" then
+            if type(activeContext.professionID) == "number" and activeContext.professionID == entry.professionID then
+                isActive = true
+            elseif type(activeContext.professionName) == "string" and string.lower(activeContext.professionName) == string.lower(entry.label or "") then
+                isActive = true
+            end
+        end
+
+        if isActive then
+            btn:SetBackdropColor(0.29, 0.18, 0.14, 0.96)
+            btn:SetBackdropBorderColor(0.78, 0.58, 0.18, 0.95)
+            btn.text:SetTextColor(1, 0.92, 0.35)
+        else
+            btn:SetBackdropColor(0.16, 0.10, 0.10, 0.90)
+            btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
+            btn.text:SetTextColor(0.95, 0.95, 0.95)
+        end
+    end
+
+    for i = #entries + 1, #ui.professionButtons do
+        ui.professionButtons[i]:Hide()
+    end
+
+    return math.max(1, math.ceil(#entries / columns))
+end
+
 local function acquireTab(index)
     local btn = ui.tabs[index]
     if btn then
@@ -698,7 +833,8 @@ refreshSideTabs = function()
         ui.pinAppliedForProfessionID = nil
     end
 
-    local y = -48
+    local switcherRows = refreshProfessionSwitcher(activeContext)
+    local y = -48 - (switcherRows * 20) - 8
     for i, entry in ipairs(entries) do
         local btn = acquireTab(i)
         btn:ClearAllPoints()
