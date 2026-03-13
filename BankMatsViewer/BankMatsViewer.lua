@@ -256,6 +256,14 @@ local QUALITY_SORT = {
     ["Unknown"] = 7,
 }
 
+local ITEM_QUALITY_BORDER_ATLASES = {
+    [1] = "Professions-Slot-Frame",
+    [2] = "Professions-Slot-Frame-Green",
+    [3] = "Professions-Slot-Frame-Blue",
+    [4] = "Professions-Slot-Frame-Epic",
+    [5] = "Professions-Slot-Frame-Legendary",
+}
+
 local MATERIAL_SORT = {
     ["Cloth"] = 1,
     ["Herbs"] = 2,
@@ -274,6 +282,7 @@ local ui = {
     frame = nil,
     summaryText = nil,
     showUnownedCheck = nil,
+    showUnownedLabel = nil,
     expandAllButton = nil,
     collapseAllButton = nil,
     scrollFrame = nil,
@@ -570,6 +579,14 @@ local function getItemQualityLabel(itemID)
     return "Unknown"
 end
 
+local function getItemQualityNumber(itemID)
+    local quality = select(3, GetItemInfo(itemID))
+    if type(quality) == "number" then
+        return quality
+    end
+    return nil
+end
+
 local function getReagentQualityInfo(itemID)
     if C_TradeSkillUI and C_TradeSkillUI.GetItemReagentQualityInfo then
         local info = C_TradeSkillUI.GetItemReagentQualityInfo(itemID)
@@ -651,6 +668,7 @@ local function buildRowsFromLookup(itemsTable, catalogLookup)
             local materialType, professionLabel = classifyItem(itemID)
             local materialFamily = canonicalizeMaterialFamily(materialType, professionLabel)
             local expansion = getItemExpansionName(itemID)
+            local itemQuality = getItemQualityNumber(itemID)
             local quality = getItemQualityLabel(itemID)
 
             rows[#rows + 1] = {
@@ -664,6 +682,7 @@ local function buildRowsFromLookup(itemsTable, catalogLookup)
                 isMissing = count == 0,
                 expansion = expansion,
                 expansionSort = EXPANSION_SORT[expansion] or 99,
+                itemQuality = itemQuality,
                 quality = quality,
                 qualitySort = QUALITY_SORT[quality] or 99,
                 profession = professionLabel,
@@ -872,6 +891,11 @@ local function acquireItemButton(index)
     btn.slotBG:SetTexture("Interface/PaperDoll/UI-Backpack-EmptySlot")
     btn.slotBG:SetVertexColor(1, 1, 1, 1)
 
+    btn.qualityBorder = btn:CreateTexture(nil, "BORDER")
+    btn.qualityBorder:SetPoint("TOPLEFT", btn, "TOPLEFT", -1, 1)
+    btn.qualityBorder:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 1, -1)
+    btn.qualityBorder:Hide()
+
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
     btn.icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 5, -5)
     btn.icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -5, 5)
@@ -968,7 +992,7 @@ local function refreshWindow()
     local headerIndex = 0
     local buttonIndex = 0
     local columns = 11
-    local cell = 48
+    local cell = 42
 
     if #rows == 0 then
         headerIndex = headerIndex + 1
@@ -1059,11 +1083,21 @@ local function refreshWindow()
                 btn.itemCount = row.count
                 btn.isMissing = row.isMissing
                 btn.expansion = row.expansion
+                btn.itemQuality = row.itemQuality
                 btn.qualityLabel = row.quality
                 btn.reagentQualityTier = row.reagentQualityTier
                 btn.reagentQualityIconInventory = row.reagentQualityIconInventory
                 btn.reagentQualityIconSmall = row.reagentQualityIconSmall
                 btn.groupLabel = row.materialType
+
+                local borderAtlas = row.itemQuality and ITEM_QUALITY_BORDER_ATLASES[row.itemQuality] or nil
+                if borderAtlas and btn.qualityBorder.SetAtlas then
+                    btn.qualityBorder:SetAtlas(borderAtlas, true)
+                    btn.qualityBorder:SetAlpha(row.isMissing and 0.55 or 1)
+                    btn.qualityBorder:Show()
+                else
+                    btn.qualityBorder:Hide()
+                end
 
                 if row.reagentQualityTier and row.reagentQualityTier > 0 then
                     if row.reagentQualityIconInventory and btn.qualityBadge.SetAtlas then
@@ -1118,28 +1152,14 @@ local function createWindow()
     ui.frame.TitleText:SetText("Bank Mats Viewer")
 
     local subtitle = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    subtitle:SetPoint("TOPLEFT", ui.frame, "TOPLEFT", 14, -34)
+    subtitle:SetPoint("TOPLEFT", ui.frame, "TOPLEFT", 14, -52)
     subtitle:SetText("Warband Bank Inventory Grid")
     subtitle:SetTextColor(0.65, 0.85, 1.0)
 
-    ui.showUnownedCheck = CreateFrame("CheckButton", nil, ui.frame, "UICheckButtonTemplate")
-    ui.showUnownedCheck:SetPoint("TOPRIGHT", ui.frame, "TOPRIGHT", -160, -34)
-    if ui.showUnownedCheck.Text then
-        ui.showUnownedCheck.Text:SetText("Show Unowned")
-        ui.showUnownedCheck.Text:ClearAllPoints()
-        ui.showUnownedCheck.Text:SetPoint("RIGHT", ui.showUnownedCheck, "LEFT", -4, 1)
-    end
-    ui.showUnownedCheck:SetChecked(state.showUnowned)
-    ui.showUnownedCheck:SetScript("OnClick", function(self)
-        state.showUnowned = self:GetChecked() == true
-        BankMatsViewerDB.showUnowned = state.showUnowned
-        refreshWindow()
-    end)
-
     ui.expandAllButton = CreateFrame("Button", nil, ui.frame, "UIPanelButtonTemplate")
-    ui.expandAllButton:SetSize(66, 20)
-    ui.expandAllButton:SetPoint("TOPRIGHT", ui.frame, "TOPRIGHT", -14, -33)
-    ui.expandAllButton:SetText("Expand")
+    ui.expandAllButton:SetSize(60, 20)
+    ui.expandAllButton:SetPoint("TOPRIGHT", ui.frame, "TOPRIGHT", -14, -34)
+    ui.expandAllButton:SetText("Open")
     ui.expandAllButton:SetScript("OnClick", function()
         for _, expansionName in ipairs(EXPANSION_SECTION_ORDER) do
             state.collapsedExpansions[expansionName] = false
@@ -1152,9 +1172,9 @@ local function createWindow()
     end)
 
     ui.collapseAllButton = CreateFrame("Button", nil, ui.frame, "UIPanelButtonTemplate")
-    ui.collapseAllButton:SetSize(66, 20)
+    ui.collapseAllButton:SetSize(60, 20)
     ui.collapseAllButton:SetPoint("RIGHT", ui.expandAllButton, "LEFT", -6, 0)
-    ui.collapseAllButton:SetText("Collapse")
+    ui.collapseAllButton:SetText("Close")
     ui.collapseAllButton:SetScript("OnClick", function()
         for _, expansionName in ipairs(EXPANSION_SECTION_ORDER) do
             state.collapsedExpansions[expansionName] = true
@@ -1166,14 +1186,34 @@ local function createWindow()
         refreshWindow()
     end)
 
+    ui.showUnownedCheck = CreateFrame("CheckButton", nil, ui.frame, "UICheckButtonTemplate")
+    ui.showUnownedCheck:SetPoint("RIGHT", ui.collapseAllButton, "LEFT", -24, -2)
+    if ui.showUnownedCheck.Text then
+        ui.showUnownedCheck.Text:SetText("")
+        ui.showUnownedCheck.Text:Hide()
+    end
+
+    ui.showUnownedLabel = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ui.showUnownedLabel:SetPoint("RIGHT", ui.showUnownedCheck, "LEFT", -4, -1)
+    ui.showUnownedLabel:SetJustifyH("RIGHT")
+    ui.showUnownedLabel:SetText("Show Unowned")
+    ui.showUnownedLabel:SetTextColor(0.95, 0.82, 0.24)
+
+    ui.showUnownedCheck:SetChecked(state.showUnowned)
+    ui.showUnownedCheck:SetScript("OnClick", function(self)
+        state.showUnowned = self:GetChecked() == true
+        BankMatsViewerDB.showUnowned = state.showUnowned
+        refreshWindow()
+    end)
+
     ui.summaryText = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ui.summaryText:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -6)
-    ui.summaryText:SetPoint("TOPRIGHT", ui.frame, "TOPRIGHT", -14, -40)
+    ui.summaryText:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -8)
+    ui.summaryText:SetPoint("TOPRIGHT", ui.frame, "TOPRIGHT", -14, -66)
     ui.summaryText:SetJustifyH("LEFT")
     ui.summaryText:SetText("No scan data yet")
 
     ui.scrollFrame = CreateFrame("ScrollFrame", nil, ui.frame, "UIPanelScrollFrameTemplate")
-    ui.scrollFrame:SetPoint("TOPLEFT", ui.frame, "TOPLEFT", 12, -78)
+    ui.scrollFrame:SetPoint("TOPLEFT", ui.frame, "TOPLEFT", 12, -102)
     ui.scrollFrame:SetPoint("BOTTOMRIGHT", ui.frame, "BOTTOMRIGHT", -30, 12)
 
     ui.content = CreateFrame("Frame", nil, ui.scrollFrame)
