@@ -473,6 +473,61 @@ local function switchProfessionSkillLine(skillLineID, isChildSkillLine)
     return false
 end
 
+local function openArchaeologyInProfessionsUI()
+    if not (GetProfessions and GetProfessionInfo) then
+        return false
+    end
+
+    local _, _, archaeology = GetProfessions()
+    local archaeologySkillLineID = ARCHAEOLOGY_SKILL_LINE_ID
+    if archaeology then
+        local _, _, _, _, _, _, skillLine = GetProfessionInfo(archaeology)
+        if type(skillLine) == "number" then
+            archaeologySkillLineID = skillLine
+        end
+    end
+
+    local opened = false
+    if addon.OpenTradeSkillForLine then
+        opened = (addon.OpenTradeSkillForLine(archaeologySkillLineID) == true)
+    end
+
+    if not opened and C_TradeSkillUI and C_TradeSkillUI.OpenTradeSkill then
+        local ok, result = pcall(C_TradeSkillUI.OpenTradeSkill, archaeologySkillLineID)
+        opened = ok and (result == true)
+    end
+
+    if opened then
+        if _G.ArchaeologyFrame and _G.ArchaeologyFrame.IsShown and _G.ArchaeologyFrame:IsShown() then
+            _G.ArchaeologyFrame:Hide()
+        end
+        ui.pinAppliedForProfessionID = nil
+        C_Timer.After(0, refreshSideTabs)
+    end
+
+    return opened
+end
+
+local function installArchaeologyRedirect()
+    if ui.archaeologyRedirectInstalled then
+        return
+    end
+
+    if type(_G.ToggleArchaeology) ~= "function" then
+        return
+    end
+
+    ui.originalToggleArchaeology = _G.ToggleArchaeology
+    _G.ToggleArchaeology = function(...)
+        if openArchaeologyInProfessionsUI() then
+            return
+        end
+        return ui.originalToggleArchaeology(...)
+    end
+
+    ui.archaeologyRedirectInstalled = true
+end
+
 local function getProfessionSwitchEntries()
     local entries = {}
 
@@ -522,7 +577,7 @@ local function getProfessionSwitchEntries()
     addEntry(prof2, "Primary")
     addEntry(cooking, "Secondary")
     addEntry(fishing, "Secondary")
-    addEntry(archaeology, "Secondary")
+    addEntry(archaeology, "Archaeology")
 
     table.sort(entries, function(a, b)
         if (a.section or "") ~= (b.section or "") then
@@ -608,8 +663,11 @@ local function refreshProfessionSwitcher(activeContext)
 
     local primary = {}
     local secondary = {}
+    local archaeology = {}
     for _, entry in ipairs(entries) do
-        if entry.section == "Secondary" then
+        if entry.section == "Archaeology" then
+            archaeology[#archaeology + 1] = entry
+        elseif entry.section == "Secondary" then
             secondary[#secondary + 1] = entry
         else
             primary[#primary + 1] = entry
@@ -676,6 +734,7 @@ local function refreshProfessionSwitcher(activeContext)
 
     renderSection("Primary", primary)
     renderSection("Secondary", secondary)
+    renderSection("Archaeology", archaeology)
 
     for i = buttonIndex + 1, #ui.professionButtons do
         ui.professionButtons[i]:Hide()
@@ -1055,6 +1114,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     end
 
     if event == "PLAYER_LOGIN" then
+        installArchaeologyRedirect()
         if _G.ProfessionsFrame and not ui.hooksInstalled then
             _G.ProfessionsFrame:HookScript("OnShow", refreshSideTabs)
             _G.ProfessionsFrame:HookScript("OnHide", refreshSideTabs)
