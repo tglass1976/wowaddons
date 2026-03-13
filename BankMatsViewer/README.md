@@ -6,9 +6,12 @@ A World of Warcraft addon that shows crafting materials from your Warband Bank i
 
 - Scans Warband Bank tabs while the bank window is open.
 - Shows a GUI inventory grid with item icons and stack counts.
-- Creates sections for each expansion (newest first), grouped by material family.
+- Creates larger, collapsible sections for each expansion (newest first), grouped by material family.
 - Includes a tracked catalog across major material types (cloth, herbs, ores/metals, leather).
 - Missing catalog entries are displayed as greyed-out icons.
+- Includes a `Show Unowned` toggle in the UI:
+  - Enabled: shows all known items from the saved catalog DB.
+  - Disabled: shows only currently owned items.
 - Reagent quality variants are supported, with quality tier badge overlays on item icons when available (no separate quality rows).
 - Caches latest scan result in saved variables.
 - Slash commands:

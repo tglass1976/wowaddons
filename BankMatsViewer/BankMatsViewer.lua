@@ -185,6 +185,8 @@ local state = {
     totalItemTypes = 0,
     totalCount = 0,
     lastScan = 0,
+    showUnowned = true,
+    collapsedExpansions = {},
 }
 
 local EXPANSION_NAMES = {
@@ -271,6 +273,7 @@ local MATERIAL_SORT = {
 local ui = {
     frame = nil,
     summaryText = nil,
+    showUnownedCheck = nil,
     scrollFrame = nil,
     content = nil,
     itemButtons = {},
@@ -507,6 +510,30 @@ local function getCatalogLookup(itemsTable)
     return lookup
 end
 
+local function getKnownDBLookup(itemsTable)
+    local lookup = {}
+
+    if BankMatsViewerDB.catalogItemIDs then
+        for itemID in pairs(BankMatsViewerDB.catalogItemIDs) do
+            lookup[itemID] = true
+        end
+    end
+
+    for itemID in pairs(itemsTable) do
+        lookup[itemID] = true
+    end
+
+    return lookup
+end
+
+local function getOwnedLookup(itemsTable)
+    local lookup = {}
+    for itemID in pairs(itemsTable) do
+        lookup[itemID] = true
+    end
+    return lookup
+end
+
 local function getItemExpansionName(itemID)
     if EXPANSION_OVERRIDES[itemID] then
         return EXPANSION_OVERRIDES[itemID]
@@ -659,6 +686,14 @@ local function buildRows(itemsTable)
     return buildRowsFromLookup(itemsTable, getCatalogLookup(itemsTable))
 end
 
+local function buildDisplayRows(itemsTable)
+    if state.showUnowned then
+        return buildRowsFromLookup(itemsTable, getKnownDBLookup(itemsTable))
+    end
+
+    return buildRowsFromLookup(itemsTable, getOwnedLookup(itemsTable))
+end
+
 local function buildTrackedRows(itemsTable)
     return buildRowsFromLookup(itemsTable, getTrackedOnlyLookup())
 end
@@ -767,6 +802,9 @@ local function acquireHeader(index)
     header = ui.content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     header:SetJustifyH("LEFT")
     header:SetTextColor(0.95, 0.82, 0.24)
+    if header.EnableMouse then
+        header:EnableMouse(false)
+    end
     ui.groupHeaders[index] = header
     return header
 end
@@ -848,7 +886,7 @@ local function refreshWindow()
     end
 
     local itemsTable, _, totalCount, lastScan = getActiveItems()
-    local rows = buildRows(itemsTable)
+    local rows = buildDisplayRows(itemsTable)
 
     local ownedTypes = 0
     for _, row in ipairs(rows) do
@@ -857,7 +895,8 @@ local function refreshWindow()
         end
     end
 
-    local summary = tostring(ownedTypes) .. " / " .. tostring(#rows) .. " material types in Warband Bank | " .. tostring(totalCount) .. " total units"
+    local modeText = state.showUnowned and "All known" or "Owned only"
+    local summary = tostring(ownedTypes) .. " / " .. tostring(#rows) .. " material types | " .. modeText .. " | " .. tostring(totalCount) .. " total units"
     if lastScan and lastScan > 0 then
         summary = summary .. " | Last scan: " .. date("%Y-%m-%d %H:%M:%S", lastScan)
     end
@@ -891,19 +930,53 @@ local function refreshWindow()
         rowsByExpansion[row.expansion][#rowsByExpansion[row.expansion] + 1] = row
     end
 
-    local function emitHeader(text, r, g, b)
+    local function emitHeader(text, r, g, b, options)
         headerIndex = headerIndex + 1
         local header = acquireHeader(headerIndex)
         header:SetPoint("TOPLEFT", ui.content, "TOPLEFT", 8, y)
-        header:SetText(text)
-        header:SetTextColor(r or 0.95, g or 0.82, b or 0.24)
+
+        if options and options.expansionName then
+            local expansionName = options.expansionName
+            local isCollapsed = state.collapsedExpansions[expansionName] == true
+            local marker = isCollapsed and "|cffb0b0b0>|r" or "|cffd9c35fv|r"
+            local countSuffix = ""
+            if type(options.count) == "number" then
+                countSuffix = " (" .. tostring(options.count) .. ")"
+            end
+
+            header:SetFontObject(GameFontNormalLarge)
+            header:SetText(marker .. " Expansion: " .. expansionName .. countSuffix)
+            header:SetTextColor(r or 0.95, g or 0.82, b or 0.24)
+
+            if header.EnableMouse then
+                header:EnableMouse(true)
+            end
+            header:SetScript("OnMouseUp", function()
+                state.collapsedExpansions[expansionName] = not state.collapsedExpansions[expansionName]
+                BankMatsViewerDB.collapsedExpansions = BankMatsViewerDB.collapsedExpansions or {}
+                BankMatsViewerDB.collapsedExpansions[expansionName] = state.collapsedExpansions[expansionName]
+                refreshWindow()
+            end)
+        else
+            header:SetFontObject(GameFontHighlight)
+            header:SetText(text)
+            header:SetTextColor(r or 0.95, g or 0.82, b or 0.24)
+            if header.EnableMouse then
+                header:EnableMouse(false)
+            end
+            header:SetScript("OnMouseUp", nil)
+        end
+
         y = y - 22
     end
 
     for _, expansionName in ipairs(EXPANSION_SECTION_ORDER) do
-        emitHeader("Expansion: " .. expansionName, 0.9, 0.78, 0.2)
-
         local expansionRows = rowsByExpansion[expansionName] or {}
+        emitHeader(nil, 0.9, 0.78, 0.2, { expansionName = expansionName, count = #expansionRows })
+
+        if state.collapsedExpansions[expansionName] then
+            y = y - 6
+        else
         if #expansionRows == 0 then
             emitHeader("  No tracked materials", 0.55, 0.6, 0.68)
             y = y - 4
@@ -969,6 +1042,8 @@ local function refreshWindow()
             end
         end
 
+        end
+
         y = y - 6
     end
 
@@ -996,6 +1071,18 @@ local function createWindow()
     subtitle:SetPoint("TOPLEFT", ui.frame, "TOPLEFT", 14, -34)
     subtitle:SetText("Warband Bank Inventory Grid")
     subtitle:SetTextColor(0.65, 0.85, 1.0)
+
+    ui.showUnownedCheck = CreateFrame("CheckButton", nil, ui.frame, "UICheckButtonTemplate")
+    ui.showUnownedCheck:SetPoint("TOPRIGHT", ui.frame, "TOPRIGHT", -14, -34)
+    if ui.showUnownedCheck.Text then
+        ui.showUnownedCheck.Text:SetText("Show Unowned")
+    end
+    ui.showUnownedCheck:SetChecked(state.showUnowned)
+    ui.showUnownedCheck:SetScript("OnClick", function(self)
+        state.showUnowned = self:GetChecked() == true
+        BankMatsViewerDB.showUnowned = state.showUnowned
+        refreshWindow()
+    end)
 
     ui.summaryText = ui.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ui.summaryText:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -6)
@@ -1084,6 +1171,13 @@ frame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGIN" then
         BankMatsViewerDB = BankMatsViewerDB or {}
         BankMatsViewerDB.items = BankMatsViewerDB.items or {}
+        BankMatsViewerDB.catalogItemIDs = BankMatsViewerDB.catalogItemIDs or {}
+        if BankMatsViewerDB.showUnowned == nil then
+            BankMatsViewerDB.showUnowned = true
+        end
+        BankMatsViewerDB.collapsedExpansions = BankMatsViewerDB.collapsedExpansions or {}
+        state.showUnowned = BankMatsViewerDB.showUnowned
+        state.collapsedExpansions = BankMatsViewerDB.collapsedExpansions
         state.warbandBagIDs = getWarbandBagIDs()
         createWindow()
         return
