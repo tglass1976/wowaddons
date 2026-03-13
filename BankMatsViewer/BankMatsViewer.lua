@@ -274,12 +274,19 @@ local ui = {
     frame = nil,
     summaryText = nil,
     showUnownedCheck = nil,
+    expandAllButton = nil,
+    collapseAllButton = nil,
     scrollFrame = nil,
     content = nil,
     itemButtons = {},
     groupHeaders = {},
     expansionHeaders = {},
 }
+
+local TRACKED_MATERIAL_ITEM_ID_LOOKUP = {}
+for _, itemID in ipairs(TRACKED_MATERIAL_ITEM_IDS) do
+    TRACKED_MATERIAL_ITEM_ID_LOOKUP[itemID] = true
+end
 
 local function getItemName(itemID)
     local name = C_Item.GetItemNameByID(itemID)
@@ -639,7 +646,7 @@ local function buildRowsFromLookup(itemsTable, catalogLookup)
 
     for itemID in pairs(catalogLookup) do
         local count = itemsTable[itemID] or 0
-        if isCraftingMaterialByItemID(itemID) then
+        if isCraftingMaterialByItemID(itemID) or TRACKED_MATERIAL_ITEM_ID_LOOKUP[itemID] then
             local reagentQualityInfo = getReagentQualityInfo(itemID)
             local materialType, professionLabel = classifyItem(itemID)
             local materialFamily = canonicalizeMaterialFamily(materialType, professionLabel)
@@ -1116,14 +1123,46 @@ local function createWindow()
     subtitle:SetTextColor(0.65, 0.85, 1.0)
 
     ui.showUnownedCheck = CreateFrame("CheckButton", nil, ui.frame, "UICheckButtonTemplate")
-    ui.showUnownedCheck:SetPoint("TOPRIGHT", ui.frame, "TOPRIGHT", -14, -34)
+    ui.showUnownedCheck:SetPoint("TOPRIGHT", ui.frame, "TOPRIGHT", -160, -34)
     if ui.showUnownedCheck.Text then
         ui.showUnownedCheck.Text:SetText("Show Unowned")
+        ui.showUnownedCheck.Text:ClearAllPoints()
+        ui.showUnownedCheck.Text:SetPoint("RIGHT", ui.showUnownedCheck, "LEFT", -4, 1)
     end
     ui.showUnownedCheck:SetChecked(state.showUnowned)
     ui.showUnownedCheck:SetScript("OnClick", function(self)
         state.showUnowned = self:GetChecked() == true
         BankMatsViewerDB.showUnowned = state.showUnowned
+        refreshWindow()
+    end)
+
+    ui.expandAllButton = CreateFrame("Button", nil, ui.frame, "UIPanelButtonTemplate")
+    ui.expandAllButton:SetSize(66, 20)
+    ui.expandAllButton:SetPoint("TOPRIGHT", ui.frame, "TOPRIGHT", -14, -33)
+    ui.expandAllButton:SetText("Expand")
+    ui.expandAllButton:SetScript("OnClick", function()
+        for _, expansionName in ipairs(EXPANSION_SECTION_ORDER) do
+            state.collapsedExpansions[expansionName] = false
+        end
+        BankMatsViewerDB.collapsedExpansions = BankMatsViewerDB.collapsedExpansions or {}
+        for _, expansionName in ipairs(EXPANSION_SECTION_ORDER) do
+            BankMatsViewerDB.collapsedExpansions[expansionName] = false
+        end
+        refreshWindow()
+    end)
+
+    ui.collapseAllButton = CreateFrame("Button", nil, ui.frame, "UIPanelButtonTemplate")
+    ui.collapseAllButton:SetSize(66, 20)
+    ui.collapseAllButton:SetPoint("RIGHT", ui.expandAllButton, "LEFT", -6, 0)
+    ui.collapseAllButton:SetText("Collapse")
+    ui.collapseAllButton:SetScript("OnClick", function()
+        for _, expansionName in ipairs(EXPANSION_SECTION_ORDER) do
+            state.collapsedExpansions[expansionName] = true
+        end
+        BankMatsViewerDB.collapsedExpansions = BankMatsViewerDB.collapsedExpansions or {}
+        for _, expansionName in ipairs(EXPANSION_SECTION_ORDER) do
+            BankMatsViewerDB.collapsedExpansions[expansionName] = true
+        end
         refreshWindow()
     end)
 
