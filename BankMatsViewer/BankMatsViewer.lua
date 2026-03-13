@@ -111,6 +111,8 @@ local TRACKED_MATERIAL_ITEM_IDS = {
     169701, -- Death Blossom
     -- Dragonflight
     191460, -- Hochenblume
+    191461, -- Hochenblume (quality variant)
+    191462, -- Hochenblume (quality variant)
     194255, -- Abyssal Lotus
     -- Dragonflight herb quality variants and other herbs are discovered dynamically via bank scan
     -- The War Within: herbs discovered dynamically via bank scan
@@ -461,6 +463,17 @@ local function getItemQualityLabel(itemID)
     return "Unknown"
 end
 
+local function getReagentQualityTier(itemID)
+    if C_TradeSkillUI and C_TradeSkillUI.GetItemReagentQualityByItemInfo then
+        local tier = C_TradeSkillUI.GetItemReagentQualityByItemInfo(itemID)
+        if type(tier) == "number" and tier > 0 then
+            return tier
+        end
+    end
+
+    return nil
+end
+
 local function isCraftingMaterialByItemID(itemID)
     local _, _, _, _, _, classID = GetItemInfoInstant(itemID)
     return TRADEGOODS_CLASS_ID and classID == TRADEGOODS_CLASS_ID
@@ -520,6 +533,7 @@ local function buildRowsFromLookup(itemsTable, catalogLookup)
                 count = count,
                 name = getItemName(itemID),
                 icon = getItemIcon(itemID),
+                reagentQualityTier = getReagentQualityTier(itemID),
                 isMissing = count == 0,
                 expansion = expansion,
                 expansionSort = EXPANSION_SORT[expansion] or 99,
@@ -691,6 +705,14 @@ local function acquireItemButton(index)
     btn.countText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     btn.countText:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -3, 3)
 
+    btn.qualityBadge = btn:CreateTexture(nil, "OVERLAY")
+    btn.qualityBadge:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+    btn.qualityBadge:SetSize(16, 16)
+
+    btn.qualityText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    btn.qualityText:SetPoint("TOPLEFT", btn, "TOPLEFT", 3, -2)
+    btn.qualityText:SetTextColor(1, 0.95, 0.3)
+
     btn:SetScript("OnEnter", function(self)
         if not self.itemID then
             return
@@ -704,6 +726,9 @@ local function acquireItemButton(index)
         end
         if self.qualityLabel then
             GameTooltip:AddLine("Quality: " .. self.qualityLabel, 0.85, 0.85, 0.95)
+        end
+        if self.reagentQualityTier then
+            GameTooltip:AddLine("Reagent Quality Tier: " .. tostring(self.reagentQualityTier), 1, 0.92, 0.35)
         end
         if self.groupLabel then
             GameTooltip:AddLine("Type: " .. self.groupLabel, 0.8, 0.95, 0.8)
@@ -808,7 +833,23 @@ local function refreshWindow()
                 btn.isMissing = row.isMissing
                 btn.expansion = row.expansion
                 btn.qualityLabel = row.quality
+                btn.reagentQualityTier = row.reagentQualityTier
                 btn.groupLabel = row.profession .. " / " .. row.materialType
+
+                if row.reagentQualityTier and row.reagentQualityTier > 0 then
+                    local atlas = "Professions-Icon-Quality-Tier" .. tostring(row.reagentQualityTier) .. "-Small"
+                    if btn.qualityBadge.SetAtlas and btn.qualityBadge:SetAtlas(atlas, true) then
+                        btn.qualityBadge:Show()
+                        btn.qualityText:Hide()
+                    else
+                        btn.qualityBadge:Hide()
+                        btn.qualityText:SetText(tostring(row.reagentQualityTier))
+                        btn.qualityText:Show()
+                    end
+                else
+                    btn.qualityBadge:Hide()
+                    btn.qualityText:Hide()
+                end
 
                 col = col + 1
                 if col >= columns then

@@ -9,6 +9,7 @@ A World of Warcraft addon that shows crafting materials from your Warband Bank i
 - Creates sections for each expansion (newest first).
 - Includes a tracked catalog across major material types (cloth, herbs, ores/metals, leather).
 - Missing catalog entries are displayed as greyed-out icons.
+- Reagent quality variants are supported, with quality tier badge overlays on item icons when available.
 - Caches latest scan result in saved variables.
 - Slash commands:
   - `/bmats`
