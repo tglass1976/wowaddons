@@ -1007,7 +1007,7 @@ local function refreshWindow()
     local function emitHeader(text, r, g, b)
         headerIndex = headerIndex + 1
         local header = acquireHeader(headerIndex)
-        header:SetPoint("TOPLEFT", ui.content, "TOPLEFT", 8, y)
+        header:SetPoint("TOPLEFT", ui.content, "TOPLEFT", 10, y)
 
         header:SetFontObject(GameFontHighlight)
         header:SetText(text)
@@ -1061,12 +1061,12 @@ local function refreshWindow()
                         col = 0
                     end
                     currentMaterial = row.materialType
-                    emitHeader("  " .. currentMaterial, 0.72, 0.88, 0.98)
+                    emitHeader(currentMaterial, 0.72, 0.88, 0.98)
                 end
 
                 buttonIndex = buttonIndex + 1
                 local btn = acquireItemButton(buttonIndex)
-                local x = 8 + (col * cell)
+                local x = 10 + (col * cell)
                 btn:SetPoint("TOPLEFT", ui.content, "TOPLEFT", x, y)
                 SetItemButtonTexture(btn, row.icon)
                 SetItemButtonCount(btn, row.count)
