@@ -1,89 +1,39 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Battle.net Community Developer Portal</title>
-  <base href="/">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-  <script type="text/javascript">
-    (function () {
-      var env = {
-        "dev-portal.api-access.uri": "/access/clients",
-        "dev-portal.root.try-it-now.oauth.host": "https://oauth.battle.net",
-        "cookieConsent.host": "battle.net",
-        "cookieConsent.onetrustScriptUrl": "https://cdn.cookielaw.org/langswitch/06b5cc84-67ee-4c33-8c20-75d78f201905.js",
-      };
-      var BlzCookieConsent = {
-        host: env['cookieConsent.host'],
-        onetrustScriptUrl: env['cookieConsent.onetrustScriptUrl'],
-      };
-      window.BlzAppEnv = env;
-      window.BlzCookieConsent = BlzCookieConsent;
-    })();
-  </script>
-  <script src="assets/cookie-consent-filter-compat.js" defer></script>
-  <!-- Google Tag Manager -->
- 	<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
- 	new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
- 	j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
- 	'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
- 	})(window,document,'script','dataLayer','GTM-N46XHH5G');</script>
- 	<!-- End Google Tag Manager -->
-  <!-- baseui battlenet nav -->
-  <script src="https://navbar.blizzard.com/static/v1/nav-battlenet.js" async></script>
-<link rel="stylesheet" href="styles.db9d68a63bf897a2b59b.css"></head>
-<body class="blz-app blz-typography">
-<!-- Google Tag Manager (noscript) -->
-<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-N46XHH5G"
-height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-<!-- End Google Tag Manager (noscript) -->
-<!-- baseui battlenet nav-->
-<blz-nav-battlenet
-  content="battlenet-site-bwa"
-  locale="en-us"
-  transition-overflow-from="left"
-  user-endpoint="/login/api/v1/user"
-  >
-  <style>
-    blz-nav-battlenet {
-      min-width: 100%;
-    }
-    blz-nav-link[slot=primary-menu] {
-      --navbar-menu-font-size: 16px;
-    }
-    blz-nav-link[slot=site-logo] {
-      padding-right: 16px;
-    }
-  </style>
-  <blz-nav-link
-    id="blz-nav-api-access-link"
-    slot="primary-menu"
-    text="API Access"
-    href="/access/clients"
-  ></blz-nav-link>
-  <blz-nav-link
-    id="blz-nav-api-docs-link"
-    slot="primary-menu"
-    text="Documentation"
-    href="/documentation"
-  ></blz-nav-link>
-  <blz-nav-link
-    id="blz-nav-api-forums-link"
-    slot="primary-menu"
-    text="Forums"
-    href="https://us.forums.blizzard.com/en/blizzard/c/api-discussion"
-  ></blz-nav-link>
-</blz-nav-battlenet>
-<app-root></app-root>
-<!-- battlenet nav -->
-<script>
-  (function () {
-    document.addEventListener('blz-nav:cms-loaded', (event) => {
-      const [accountDropdown] = event?.detail?.cmsContent?.filter((el) => el?.id === 'account')
-      accountDropdown.querySelector('#blz-nav-battlenet').icon = "battlenet"
-      accountDropdown.querySelector('#blz-nav-log-out').href = "/login/logout?ref=%2F"
-  })})();
-</script>
-<script src="runtime-es2015.00a1d898fe9540cdfc2a.js" type="module"></script><script src="runtime-es5.00a1d898fe9540cdfc2a.js" nomodule defer></script><script src="polyfills-es5.f9a5f42559e43c79af27.js" nomodule defer></script><script src="polyfills-es2015.7d48e6b26d37d7ca52a8.js" type="module"></script><script src="main-es2015.0bb1fd34679202167694.js" type="module"></script><script src="main-es5.0bb1fd34679202167694.js" nomodule defer></script></body>
-</html>
+﻿# World of Warcraft Profile APIs
+Source: https://community.developer.battle.net/documentation/world-of-warcraft/profile-apis
+
+Encompass profile game data (character, guild, account-level).
+For namespace details see: guides/namespaces
+
+## Host Names
+Non-China: {region}.api.blizzard.com  (us, eu, kr, tw)
+China: gateway.battlenet.com.cn
+
+## Namespaces
+Namespace: profile-{region} for all profile endpoints.
+
+## Endpoint Listing (partial — see source URL for full list)
+
+### Account Profile API
+GET /profile/user/wow
+GET /profile/user/wow/protected-character/{realmId}-{characterId}
+GET /profile/user/wow/collections
+GET /profile/user/wow/collections/decor
+GET /profile/user/wow/collections/heirlooms
+GET /profile/user/wow/collections/mounts
+GET /profile/user/wow/collections/pets
+GET /profile/user/wow/collections/toys
+GET /profile/user/wow/collections/transmogs
+
+### Character Achievements API
+GET /profile/wow/character/{realmSlug}/{characterName}/achievements
+GET /profile/wow/character/{realmSlug}/{characterName}/achievements/statistics
+
+### Character Media API
+GET /profile/wow/character/{realmSlug}/{characterName}/character-media
+
+NOTE: The full page covers many more endpoint groups including:
+Character Appearance, Character Collections, Character Encounters,
+Character Equipment, Character Hunter Pets, Character Mythic Keystone,
+Character Professions, Character Profile, Character PvP, Character Quests,
+Character Reputations, Character Soulbinds, Character Specializations,
+Character Statistics, Character Titles, Guild, and more.

@@ -1,13 +1,15 @@
-version: 1
+version: 2
 last_updated: 2026-03-12
 source_root: https://community.developer.battle.net/documentation/world-of-warcraft
 api_families:
   - name: game_data
     description: static and dynamic game data
+    namespace_categories: [static, dynamic]
   - name: profile
     description: account and character profile data
+    namespace_categories: [profile]
   - name: guides
-    description: namespaces, localization, search, known issues, media docs
+    description: namespaces, localization, search, known issues, media docs, character renders
 hosts:
   non_china_pattern: "{region}.api.blizzard.com"
   china_host: gateway.battlenet.com.cn
@@ -24,9 +26,15 @@ namespaces:
     header: "Battlenet-Namespace: {namespace}"
     query: "namespace={namespace}"
   categories:
-    static: "static-{region}"
-    dynamic: "dynamic-{region}"
-    profile: "profile-{region}"
+    static:
+      pattern: "static-{region}"
+      description: per-patch game data (items, achievements, spells)
+    dynamic:
+      pattern: "dynamic-{region}"
+      description: live in-game events (leaderboards, auctions, WoW Token)
+    profile:
+      pattern: "profile-{region}"
+      description: character/guild/account data; chars updated on logout
 localization:
   query_param: locale
   supported_locales:
@@ -91,15 +99,61 @@ repo_takeaway:
     - companion app data import
     - offline cache generation
     - account/profile sync tools
+  never_do:
+    - embed client_id or client_secret in addon Lua files
+    - make HTTP requests from in-game addon runtime code
 sources:
-  - https://community.developer.battle.net/documentation/world-of-warcraft
-  - https://community.developer.battle.net/documentation/world-of-warcraft/guides
   - https://community.developer.battle.net/documentation/world-of-warcraft/guides/namespaces
+  - https://community.developer.battle.net/documentation/world-of-warcraft/guides/known-issues
   - https://community.developer.battle.net/documentation/world-of-warcraft/guides/localization
+  - https://community.developer.battle.net/documentation/world-of-warcraft/guides/media-documents
+  - https://community.developer.battle.net/documentation/world-of-warcraft/guides/character-renders
+  - https://community.developer.battle.net/documentation/world-of-warcraft/guides/search
   - https://community.developer.battle.net/documentation/world-of-warcraft/game-data-apis
   - https://community.developer.battle.net/documentation/world-of-warcraft/profile-apis
-  - https://community.developer.battle.net/documentation/guides/getting-started
-  - https://community.developer.battle.net/documentation/guides/using-oauth
-  - https://community.developer.battle.net/documentation/guides/using-oauth/client-credentials-flow
-  - https://community.developer.battle.net/documentation/guides/using-oauth/authorization-code-flow
-  - https://community.developer.battle.net/documentation/guides/regionality-and-apis
+media_documents:
+  description: >
+    Media documents expose web assets (icons, renders, images) linked from game data resources.
+    Always cache assets on your own servers; do NOT link directly to Blizzard CDN.
+  pattern:
+    step1: resource doc contains a media key with href to the media endpoint
+    step2: "GET /data/wow/media/{type}/{id}?namespace=static-{region}"
+    step3: response contains assets array with key/value pairs (e.g. key=icon)
+  example_media_url: "https://render-us.worldofwarcraft.com/icons/56/inv_sword_39.jpg"
+  media_search: "GET /data/wow/search/{type}?namespace=static-us&_tag=item"
+character_renders:
+  description: Generated when a character logs out of the game.
+  endpoint: "GET /profile/wow/character/{realm-slug}/{character-name}/character-media"
+  namespace: "profile-{region}"
+  fallback_image:
+    param: "?alt=/shadow/avatar/{race-id}-{gender-id}.jpg"
+    example: "?alt=/shadow/avatar/2-1.jpg"
+    gender_ids:
+      male: 0
+      female: 1
+    race_id_source: "GET /data/wow/playable-race/index?namespace=static-us"
+search_api:
+  description: Paginated search within game data API document types.
+  supported_types: [realm, connected-realm]
+  max_results_per_response: 1000
+  base_url: "/data/wow/search/{documentType}?namespace={namespace}"
+  field_query: "/data/wow/search/{documentType}?namespace={namespace}&{field}={value}"
+  nested_field_notation: dot (e.g. realms.timezone=America/New_York)
+  special_params:
+    _tag: "media document type filter (item, spell, creature-display, etc.)"
+    _page: "page number, default 1"
+    _pageSize: "results per page, default 100, max 1000"
+    orderby: "comma-separated fields with optional :asc/:desc"
+  operators:
+    AND: "implicit via multiple params (str=5&dex=10)"
+    OR: "|| between values (type=man||bear||pig)"
+    NOT: "!= operator (race!=orc)"
+    NOT_OR: "combined (race!=orc||human)"
+    RANGE_inclusive: "[min,max] (str=[2,99])"
+    RANGE_exclusive: "(min,max) (str=(2,99))"
+    MIN: "[min,] (str=[41,])"
+    MAX: "[,max] (str=[,77])"
+known_issues:
+  unavailable_child_links: >
+    A JSON response may link to a child document protected by a private scope or not yet
+    published. Requests to those child resources return 404, 401, or similar. Expected behavior.
