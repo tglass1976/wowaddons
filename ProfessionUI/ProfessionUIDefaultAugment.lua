@@ -515,18 +515,30 @@ local function openArchaeologyInProfessionsUI()
     return true
 end
 
+local function triggerArchaeologyRedirect(attempt)
+    attempt = attempt or 1
+    local redirected = openArchaeologyInProfessionsUI()
+    if redirected then
+        return
+    end
+
+    if attempt >= 8 then
+        return
+    end
+
+    if C_Timer and C_Timer.After then
+        C_Timer.After(0.1, function()
+            triggerArchaeologyRedirect(attempt + 1)
+        end)
+    end
+end
+
 local function installArchaeologyRedirect()
     if type(_G.ToggleArchaeology) == "function" and not ui.archaeologyTogglePatched then
         ui.originalToggleArchaeology = _G.ToggleArchaeology
         _G.ToggleArchaeology = function(...)
             local result = ui.originalToggleArchaeology(...)
-            if C_Timer and C_Timer.After then
-                C_Timer.After(0, function()
-                    openArchaeologyInProfessionsUI()
-                end)
-            else
-                openArchaeologyInProfessionsUI()
-            end
+            triggerArchaeologyRedirect(1)
             return result
         end
         ui.archaeologyTogglePatched = true
@@ -535,6 +547,9 @@ local function installArchaeologyRedirect()
     if _G.ArchaeologyFrame and not ui.archaeologyFrameHookInstalled then
         _G.ArchaeologyFrame:HookScript("OnShow", function(frame)
             local redirected = openArchaeologyInProfessionsUI()
+            if not redirected then
+                triggerArchaeologyRedirect(1)
+            end
 
             if redirected and frame and frame.IsShown and frame:IsShown() then
                 frame:Hide()
