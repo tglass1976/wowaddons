@@ -509,23 +509,35 @@ local function openArchaeologyInProfessionsUI()
 end
 
 local function installArchaeologyRedirect()
-    if ui.archaeologyRedirectInstalled then
-        return
-    end
-
-    if type(_G.ToggleArchaeology) ~= "function" then
-        return
-    end
-
-    ui.originalToggleArchaeology = _G.ToggleArchaeology
-    _G.ToggleArchaeology = function(...)
-        if openArchaeologyInProfessionsUI() then
-            return
+    if type(_G.ToggleArchaeology) == "function" and not ui.archaeologyTogglePatched then
+        ui.originalToggleArchaeology = _G.ToggleArchaeology
+        _G.ToggleArchaeology = function(...)
+            if openArchaeologyInProfessionsUI() then
+                return
+            end
+            return ui.originalToggleArchaeology(...)
         end
-        return ui.originalToggleArchaeology(...)
+        ui.archaeologyTogglePatched = true
     end
 
-    ui.archaeologyRedirectInstalled = true
+    if _G.ArchaeologyFrame and not ui.archaeologyFrameHookInstalled then
+        _G.ArchaeologyFrame:HookScript("OnShow", function(frame)
+            if ui.archaeologyRedirectInFlight then
+                return
+            end
+
+            ui.archaeologyRedirectInFlight = true
+            local redirected = openArchaeologyInProfessionsUI()
+            ui.archaeologyRedirectInFlight = false
+
+            if redirected and frame and frame.IsShown and frame:IsShown() then
+                frame:Hide()
+            end
+        end)
+        ui.archaeologyFrameHookInstalled = true
+    end
+
+    ui.archaeologyRedirectInstalled = ui.archaeologyTogglePatched or ui.archaeologyFrameHookInstalled
 end
 
 local function getProfessionSwitchEntries()
@@ -1103,6 +1115,11 @@ eventFrame:RegisterEvent("SKILL_LINES_CHANGED")
 eventFrame:RegisterEvent("ADDON_LOADED")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
+    if event == "ADDON_LOADED" and arg1 == "Blizzard_ArchaeologyUI" then
+        installArchaeologyRedirect()
+        return
+    end
+
     if event == "ADDON_LOADED" and arg1 == "Blizzard_Professions" then
         if _G.ProfessionsFrame and not ui.hooksInstalled then
             _G.ProfessionsFrame:HookScript("OnShow", refreshSideTabs)
