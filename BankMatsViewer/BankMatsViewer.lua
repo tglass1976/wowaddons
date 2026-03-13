@@ -278,6 +278,7 @@ local ui = {
     content = nil,
     itemButtons = {},
     groupHeaders = {},
+    expansionHeaders = {},
 }
 
 local function getItemName(itemID)
@@ -524,6 +525,13 @@ local function getKnownDBLookup(itemsTable)
     end
 
     return lookup
+end
+
+local function seedCatalogFromTrackedList()
+    BankMatsViewerDB.catalogItemIDs = BankMatsViewerDB.catalogItemIDs or {}
+    for _, itemID in ipairs(TRACKED_MATERIAL_ITEM_IDS) do
+        BankMatsViewerDB.catalogItemIDs[itemID] = true
+    end
 end
 
 local function getOwnedLookup(itemsTable)
@@ -809,6 +817,38 @@ local function acquireHeader(index)
     return header
 end
 
+local function acquireExpansionHeader(index)
+    local header = ui.expansionHeaders[index]
+    if header then
+        header:Show()
+        return header
+    end
+
+    header = CreateFrame("Button", nil, ui.content, "BackdropTemplate")
+    header:SetSize(540, 22)
+
+    header.label = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header.label:SetPoint("LEFT", header, "LEFT", 0, 0)
+    header.label:SetJustifyH("LEFT")
+    header.label:SetTextColor(0.92, 0.8, 0.3)
+
+    header.toggle = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    header.toggle:SetPoint("RIGHT", header, "RIGHT", -2, 0)
+    header.toggle:SetJustifyH("RIGHT")
+    header.toggle:SetTextColor(0.86, 0.86, 0.86)
+
+    header:SetScript("OnEnter", function(self)
+        self.toggle:SetTextColor(1, 1, 1)
+    end)
+
+    header:SetScript("OnLeave", function(self)
+        self.toggle:SetTextColor(0.86, 0.86, 0.86)
+    end)
+
+    ui.expansionHeaders[index] = header
+    return header
+end
+
 local function acquireItemButton(index)
     local btn = ui.itemButtons[index]
     if btn then
@@ -905,8 +945,15 @@ local function refreshWindow()
     for _, header in ipairs(ui.groupHeaders) do
         header:Hide()
     end
+    for _, header in ipairs(ui.expansionHeaders) do
+        header:Hide()
+    end
     for _, btn in ipairs(ui.itemButtons) do
         btn:Hide()
+    end
+
+    if ui.showUnownedCheck then
+        ui.showUnownedCheck:SetChecked(state.showUnowned)
     end
 
     local y = -8
@@ -930,49 +977,45 @@ local function refreshWindow()
         rowsByExpansion[row.expansion][#rowsByExpansion[row.expansion] + 1] = row
     end
 
-    local function emitHeader(text, r, g, b, options)
+    local function emitHeader(text, r, g, b)
         headerIndex = headerIndex + 1
         local header = acquireHeader(headerIndex)
         header:SetPoint("TOPLEFT", ui.content, "TOPLEFT", 8, y)
 
-        if options and options.expansionName then
-            local expansionName = options.expansionName
-            local isCollapsed = state.collapsedExpansions[expansionName] == true
-            local marker = isCollapsed and "|cffb0b0b0>|r" or "|cffd9c35fv|r"
-            local countSuffix = ""
-            if type(options.count) == "number" then
-                countSuffix = " (" .. tostring(options.count) .. ")"
-            end
-
-            header:SetFontObject(GameFontNormalLarge)
-            header:SetText(marker .. " Expansion: " .. expansionName .. countSuffix)
-            header:SetTextColor(r or 0.95, g or 0.82, b or 0.24)
-
-            if header.EnableMouse then
-                header:EnableMouse(true)
-            end
-            header:SetScript("OnMouseUp", function()
-                state.collapsedExpansions[expansionName] = not state.collapsedExpansions[expansionName]
-                BankMatsViewerDB.collapsedExpansions = BankMatsViewerDB.collapsedExpansions or {}
-                BankMatsViewerDB.collapsedExpansions[expansionName] = state.collapsedExpansions[expansionName]
-                refreshWindow()
-            end)
-        else
-            header:SetFontObject(GameFontHighlight)
-            header:SetText(text)
-            header:SetTextColor(r or 0.95, g or 0.82, b or 0.24)
-            if header.EnableMouse then
-                header:EnableMouse(false)
-            end
-            header:SetScript("OnMouseUp", nil)
+        header:SetFontObject(GameFontHighlight)
+        header:SetText(text)
+        header:SetTextColor(r or 0.95, g or 0.82, b or 0.24)
+        if header.EnableMouse then
+            header:EnableMouse(false)
         end
+        header:SetScript("OnMouseUp", nil)
 
         y = y - 22
     end
 
+    local expansionHeaderIndex = 0
+    local function emitExpansionHeader(expansionName, count)
+        expansionHeaderIndex = expansionHeaderIndex + 1
+        local header = acquireExpansionHeader(expansionHeaderIndex)
+        header:SetPoint("TOPLEFT", ui.content, "TOPLEFT", 8, y)
+
+        local isCollapsed = state.collapsedExpansions[expansionName] == true
+        header.label:SetText("Expansion: " .. expansionName .. " (" .. tostring(count) .. ")")
+        header.toggle:SetText(isCollapsed and "+" or "-")
+
+        header:SetScript("OnClick", function()
+            state.collapsedExpansions[expansionName] = not state.collapsedExpansions[expansionName]
+            BankMatsViewerDB.collapsedExpansions = BankMatsViewerDB.collapsedExpansions or {}
+            BankMatsViewerDB.collapsedExpansions[expansionName] = state.collapsedExpansions[expansionName]
+            refreshWindow()
+        end)
+
+        y = y - 26
+    end
+
     for _, expansionName in ipairs(EXPANSION_SECTION_ORDER) do
         local expansionRows = rowsByExpansion[expansionName] or {}
-        emitHeader(nil, 0.9, 0.78, 0.2, { expansionName = expansionName, count = #expansionRows })
+        emitExpansionHeader(expansionName, #expansionRows)
 
         if state.collapsedExpansions[expansionName] then
             y = y - 6
@@ -1176,6 +1219,7 @@ frame:SetScript("OnEvent", function(_, event)
             BankMatsViewerDB.showUnowned = true
         end
         BankMatsViewerDB.collapsedExpansions = BankMatsViewerDB.collapsedExpansions or {}
+        seedCatalogFromTrackedList()
         state.showUnowned = BankMatsViewerDB.showUnowned
         state.collapsedExpansions = BankMatsViewerDB.collapsedExpansions
         state.warbandBagIDs = getWarbandBagIDs()
