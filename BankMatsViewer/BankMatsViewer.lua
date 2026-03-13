@@ -551,44 +551,6 @@ local function seedCatalogFromTrackedList()
     end
 end
 
-local function enrichCatalogFromRecentQualitySiblings(itemsTable)
-    BankMatsViewerDB.catalogItemIDs = BankMatsViewerDB.catalogItemIDs or {}
-
-    local seedLookup = {}
-    if itemsTable then
-        for itemID in pairs(itemsTable) do
-            seedLookup[itemID] = true
-        end
-    end
-    for itemID in pairs(BankMatsViewerDB.catalogItemIDs) do
-        seedLookup[itemID] = true
-    end
-
-    local added = 0
-    for itemID in pairs(seedLookup) do
-        local expansion = getItemExpansionName(itemID)
-        if expansion == "The War Within" or expansion == "Midnight" then
-            local tier = getReagentQualityTier(itemID)
-            if type(tier) == "number" and tier >= 1 and tier <= 3 then
-                for delta = -2, 2 do
-                    if delta ~= 0 then
-                        local candidate = itemID + delta
-                        if candidate > 0 and not BankMatsViewerDB.catalogItemIDs[candidate] then
-                            local _, _, _, _, _, classID = GetItemInfoInstant(candidate)
-                            if classID == TRADEGOODS_CLASS_ID then
-                                BankMatsViewerDB.catalogItemIDs[candidate] = true
-                                added = added + 1
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    return added
-end
-
 local function getOwnedLookup(itemsTable)
     local lookup = {}
     for itemID in pairs(itemsTable) do
@@ -651,6 +613,44 @@ local function getReagentQualityTier(itemID)
     end
 
     return nil
+end
+
+local function enrichCatalogFromRecentQualitySiblings(itemsTable)
+    BankMatsViewerDB.catalogItemIDs = BankMatsViewerDB.catalogItemIDs or {}
+
+    local seedLookup = {}
+    if itemsTable then
+        for itemID in pairs(itemsTable) do
+            seedLookup[itemID] = true
+        end
+    end
+    for itemID in pairs(BankMatsViewerDB.catalogItemIDs) do
+        seedLookup[itemID] = true
+    end
+
+    local added = 0
+    for itemID in pairs(seedLookup) do
+        local expansion = getItemExpansionName(itemID)
+        if expansion == "The War Within" or expansion == "Midnight" then
+            local tier = getReagentQualityTier(itemID)
+            if type(tier) == "number" and tier >= 1 and tier <= 3 then
+                for delta = -2, 2 do
+                    if delta ~= 0 then
+                        local candidate = itemID + delta
+                        if candidate > 0 and not BankMatsViewerDB.catalogItemIDs[candidate] then
+                            local _, _, _, _, _, classID = GetItemInfoInstant(candidate)
+                            if classID == TRADEGOODS_CLASS_ID then
+                                BankMatsViewerDB.catalogItemIDs[candidate] = true
+                                added = added + 1
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return added
 end
 
 local function isCraftingMaterialByItemID(itemID)
