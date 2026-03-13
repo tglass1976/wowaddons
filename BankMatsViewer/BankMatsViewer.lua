@@ -1320,6 +1320,40 @@ local function toggleWindow()
     refreshWindow()
 end
 
+local function parseItemIDFromInput(input)
+    local text = strtrim(input or "")
+    if text == "" then
+        return nil
+    end
+
+    local direct = tonumber(text)
+    if direct and direct > 0 then
+        return math.floor(direct)
+    end
+
+    local fromLink = string.match(text, "item:(%d+)")
+    if fromLink then
+        local n = tonumber(fromLink)
+        if n and n > 0 then
+            return n
+        end
+    end
+
+    return nil
+end
+
+local function addCatalogItemID(itemID)
+    BankMatsViewerDB.catalogItemIDs = BankMatsViewerDB.catalogItemIDs or {}
+    BankMatsViewerDB.catalogItemIDs[itemID] = true
+end
+
+local function removeCatalogItemID(itemID)
+    if not BankMatsViewerDB.catalogItemIDs then
+        return
+    end
+    BankMatsViewerDB.catalogItemIDs[itemID] = nil
+end
+
 SLASH_BANKMATSVIEWER1 = "/bmats"
 SLASH_BANKMATSVIEWER2 = "/bankmats"
 SlashCmdList.BANKMATSVIEWER = function(msg)
@@ -1357,6 +1391,33 @@ SlashCmdList.BANKMATSVIEWER = function(msg)
         return
     end
 
+    if arg == "add" then
+        local itemID = parseItemIDFromInput(rest)
+        if not itemID then
+            print("|cffff6666Bank Mats Viewer:|r usage: /bmats add <itemID or itemLink>")
+            return
+        end
+
+        addCatalogItemID(itemID)
+        C_Item.RequestLoadItemDataByID(itemID)
+        refreshWindow()
+        print("|cff33ff99Bank Mats Viewer:|r added item " .. tostring(itemID) .. " to catalog.")
+        return
+    end
+
+    if arg == "remove" then
+        local itemID = parseItemIDFromInput(rest)
+        if not itemID then
+            print("|cffff6666Bank Mats Viewer:|r usage: /bmats remove <itemID or itemLink>")
+            return
+        end
+
+        removeCatalogItemID(itemID)
+        refreshWindow()
+        print("|cff33ff99Bank Mats Viewer:|r removed item " .. tostring(itemID) .. " from catalog.")
+        return
+    end
+
     if arg == "help" then
         print("|cff33ff99Bank Mats Viewer commands:|r")
         print("  /bmats            - Toggle window")
@@ -1364,6 +1425,8 @@ SlashCmdList.BANKMATSVIEWER = function(msg)
         print("  /bmats audit      - Tracked vs full-catalog diagnostics")
         print("  /bmats missing N  - List up to N missing tracked items (default 40)")
         print("  /bmats missing N all - List up to N missing full-catalog items")
+        print("  /bmats add <id|link>    - Add a missing item to catalog")
+        print("  /bmats remove <id|link> - Remove an item from catalog")
         return
     end
 
