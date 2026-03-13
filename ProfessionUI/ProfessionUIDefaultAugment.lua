@@ -458,18 +458,43 @@ local function getProfessionSwitchEntries()
         return entries
     end
 
+    local learnedBySkillLine = {}
+    local learnedByName = {}
+    if GetProfessions and GetProfessionInfo then
+        local prof1, prof2, archaeology, fishing, cooking = GetProfessions()
+        for _, profIndex in ipairs({ prof1, prof2, cooking, fishing, archaeology }) do
+            if profIndex then
+                local name, _, _, _, _, _, skillLine = GetProfessionInfo(profIndex)
+                if type(skillLine) == "number" then
+                    learnedBySkillLine[skillLine] = true
+                end
+                if type(name) == "string" and name ~= "" then
+                    learnedByName[string.lower(name)] = true
+                end
+            end
+        end
+    end
+
     local seen = {}
     for _, skillLineID in ipairs(lines) do
         if type(skillLineID) == "number" then
             local info = C_TradeSkillUI.GetProfessionInfoBySkillLineID(skillLineID)
             if type(info) == "table" and info.parentProfessionID == nil then
                 local professionID = info.professionID
-                if type(professionID) == "number" and not seen[professionID] then
+                local professionName = info.professionName or info.skillLineName or ""
+                local isLearned = false
+                if type(professionID) == "number" and learnedBySkillLine[professionID] then
+                    isLearned = true
+                elseif type(professionName) == "string" and professionName ~= "" and learnedByName[string.lower(professionName)] then
+                    isLearned = true
+                end
+
+                if isLearned and type(professionID) == "number" and not seen[professionID] then
                     seen[professionID] = true
                     entries[#entries + 1] = {
                         professionID = professionID,
                         skillLineID = skillLineID,
-                        label = info.professionName or info.skillLineName or tostring(skillLineID),
+                        label = professionName ~= "" and professionName or tostring(skillLineID),
                     }
                 end
             end
