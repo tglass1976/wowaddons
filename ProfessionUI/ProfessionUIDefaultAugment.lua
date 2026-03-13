@@ -26,6 +26,7 @@ local refreshSideTabs
 
 local PIN_ICON_LOCKED = "Interface\\Buttons\\LockButton-Locked-Up"
 local PIN_ICON_UNLOCKED = "Interface\\Buttons\\LockButton-Unlocked-Up"
+local ARCHAEOLOGY_SKILL_LINE_ID = 794
 
 local function getExpansionSort(expansionName)
     return expansionOrderIndex[expansionName] or 999
@@ -261,6 +262,65 @@ local function getExpansionEntriesForCurrentProfession()
     return entries
 end
 
+local function isArchaeologyContext(activeContext)
+    if type(activeContext) ~= "table" then
+        return false
+    end
+
+    if activeContext.professionID == ARCHAEOLOGY_SKILL_LINE_ID then
+        return true
+    end
+
+    if activeContext.currentSkillLineID == ARCHAEOLOGY_SKILL_LINE_ID then
+        return true
+    end
+
+    if C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID and type(activeContext.currentSkillLineID) == "number" then
+        local info = C_TradeSkillUI.GetProfessionInfoBySkillLineID(activeContext.currentSkillLineID)
+        if type(info) == "table" then
+            if info.professionID == ARCHAEOLOGY_SKILL_LINE_ID or info.parentProfessionID == ARCHAEOLOGY_SKILL_LINE_ID then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+local function getArchaeologyRaceEntries()
+    if type(addon.LoadArchaeologyData) ~= "function" then
+        return {}
+    end
+
+    local races = addon.LoadArchaeologyData() or {}
+    local entries = {}
+
+    for _, race in ipairs(races) do
+        local progressText = ""
+        if (race.numFragRequired or 0) > 0 then
+            progressText = string.format("%d/%d", race.numFragUsed or 0, race.numFragRequired or 0)
+        else
+            progressText = string.format("Solved %d", race.numCompleted or 0)
+        end
+
+        entries[#entries + 1] = {
+            expansionName = race.raceName or "Unknown Race",
+            rankLabel = progressText,
+            isArchaeologyRace = true,
+            canSolve = race.canSolve == true,
+        }
+    end
+
+    table.sort(entries, function(a, b)
+        if a.canSolve ~= b.canSolve then
+            return a.canSolve
+        end
+        return (a.expansionName or "") < (b.expansionName or "")
+    end)
+
+    return entries
+end
+
 local function acquireTab(index)
     local btn = ui.tabs[index]
     if btn then
@@ -344,6 +404,18 @@ local function acquireTab(index)
     btn.highlight:SetColorTexture(1, 0.85, 0.2, 0.10)
     btn:RegisterForClicks("LeftButtonUp")
     btn:SetScript("OnClick", function(self)
+        if self.isArchaeologyRace then
+            if self.canSolve then
+                if C_Archaeology and C_Archaeology.SolveArtifact then
+                    pcall(C_Archaeology.SolveArtifact)
+                elseif SolveArtifact then
+                    pcall(SolveArtifact)
+                end
+                C_Timer.After(0.15, refreshSideTabs)
+            end
+            return
+        end
+
         if not self.skillLineID then
             return
         end
@@ -475,7 +547,12 @@ refreshSideTabs = function()
         return
     end
 
-    local entries = getExpansionEntriesForCurrentProfession()
+    local activeContext = getActiveProfessionContext()
+    local activeProfessionID = activeContext.professionID
+    local currentChildSkillLineID = activeContext.currentSkillLineID
+    local archaeologyMode = isArchaeologyContext(activeContext)
+
+    local entries = archaeologyMode and getArchaeologyRaceEntries() or getExpansionEntriesForCurrentProfession()
     if #entries == 0 then
         panel:Hide()
         return
@@ -483,12 +560,17 @@ refreshSideTabs = function()
 
     panel:Show()
 
-    local activeContext = getActiveProfessionContext()
-    local activeProfessionID = activeContext.professionID
-    local currentChildSkillLineID = activeContext.currentSkillLineID
+    if archaeologyMode then
+        ui.title:SetText("Archaeology Races")
+        ui.subtitle:SetText("Solve-ready races are highlighted")
+        ui.pinAppliedForProfessionID = nil
+    else
+        ui.title:SetText("Expansions")
+        ui.subtitle:SetText("Click lock icon to pin")
+    end
 
-    local pinnedExpansion = getPinnedExpansion(activeProfessionID)
-    if pinnedExpansion and ui.pinAppliedForProfessionID ~= activeProfessionID then
+    local pinnedExpansion = archaeologyMode and nil or getPinnedExpansion(activeProfessionID)
+    if not archaeologyMode and pinnedExpansion and ui.pinAppliedForProfessionID ~= activeProfessionID then
         for _, entry in ipairs(entries) do
             if entry.expansionName == pinnedExpansion then
                 if currentChildSkillLineID ~= entry.skillLineID and C_TradeSkillUI and C_TradeSkillUI.SetProfessionChildSkillLineID then
@@ -508,7 +590,7 @@ refreshSideTabs = function()
         end
     end
 
-    if not pinnedExpansion then
+    if archaeologyMode or not pinnedExpansion then
         ui.pinAppliedForProfessionID = nil
     end
 
@@ -521,27 +603,51 @@ refreshSideTabs = function()
 
         local label = entry.expansionName
         local rankLabel = ""
-        if entry.maxRank and entry.maxRank > 0 then
+        if archaeologyMode then
+            rankLabel = entry.rankLabel or ""
+        elseif entry.maxRank and entry.maxRank > 0 then
             rankLabel = string.format("%d/%d", entry.rank or 0, entry.maxRank)
         end
         local isPinned = (pinnedExpansion ~= nil and pinnedExpansion == entry.expansionName)
         btn.label:SetText(label)
         btn.rankText:SetText(rankLabel)
-        btn.skillLineID = entry.skillLineID
+        btn.skillLineID = archaeologyMode and nil or entry.skillLineID
         btn.expansionName = entry.expansionName
         btn.baseProfessionID = activeProfessionID
-        btn.isPinned = isPinned
+        btn.isPinned = archaeologyMode and false or isPinned
+        btn.isArchaeologyRace = archaeologyMode and entry.isArchaeologyRace == true
+        btn.canSolve = archaeologyMode and entry.canSolve == true
         btn.isEvenRow = (i % 2 == 0)
-        btn.pinBtn.icon:SetTexture(isPinned and PIN_ICON_LOCKED or PIN_ICON_UNLOCKED)
 
-        local isSelected = (currentChildSkillLineID == entry.skillLineID)
+        if archaeologyMode then
+            btn.pinBtn:Hide()
+            btn.pinBtn:Disable()
+            btn.label:SetPoint("LEFT", btn, "LEFT", 12, 0)
+            btn.label:SetPoint("RIGHT", btn, "RIGHT", -62, 0)
+        else
+            btn.pinBtn:Show()
+            btn.pinBtn:Enable()
+            btn.pinBtn.icon:SetTexture(isPinned and PIN_ICON_LOCKED or PIN_ICON_UNLOCKED)
+            btn.label:SetPoint("LEFT", btn, "LEFT", 32, 0)
+            btn.label:SetPoint("RIGHT", btn, "RIGHT", -62, 0)
+        end
+
+        local isSelected = (not archaeologyMode and currentChildSkillLineID == entry.skillLineID)
         btn.isSelected = isSelected
-        if isSelected then
+        if archaeologyMode and btn.canSolve then
+            btn.label:SetTextColor(0.65, 1, 0.65)
+            btn.rankText:SetTextColor(0.65, 1, 0.65)
+            btn:SetBackdropColor(0.14, 0.21, 0.14, 0.92)
+            btn:SetBackdropBorderColor(0.26, 0.56, 0.26, 0.95)
+            btn.leftAccent:Show()
+            btn.leftAccent:SetColorTexture(0.45, 0.95, 0.45, 0.95)
+        elseif isSelected then
             btn.label:SetTextColor(1, 0.92, 0.35)
             btn.rankText:SetTextColor(1, 0.92, 0.35)
             btn:SetBackdropColor(0.29, 0.18, 0.14, 0.96)
             btn:SetBackdropBorderColor(0.78, 0.58, 0.18, 0.95)
             btn.leftAccent:Show()
+            btn.leftAccent:SetColorTexture(0.88, 0.72, 0.24, 0.95)
         else
             btn.label:SetTextColor(0.95, 0.95, 0.95)
             btn.rankText:SetTextColor(0.86, 0.86, 0.86)
@@ -553,7 +659,11 @@ refreshSideTabs = function()
             btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
             btn.leftAccent:Hide()
         end
-        if isPinned then
+        if archaeologyMode then
+            btn.pinBtn.icon:SetVertexColor(0.88, 0.88, 0.88, 0.95)
+            btn.pinBtn.bg:SetColorTexture(0.12, 0.08, 0.08, 0.95)
+            btn.pinBtn.border:SetColorTexture(0.48, 0.34, 0.20, 0.55)
+        elseif isPinned then
             btn.pinBtn.icon:SetVertexColor(1, 0.92, 0.35, 1)
             btn.pinBtn.bg:SetColorTexture(0.18, 0.14, 0.08, 0.98)
             btn.pinBtn.border:SetColorTexture(0.82, 0.64, 0.22, 0.80)
