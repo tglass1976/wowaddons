@@ -517,7 +517,7 @@ local function acquireProfessionButton(index)
     end
 
     btn = CreateFrame("Button", nil, ui.panel, "BackdropTemplate")
-    btn:SetSize(22, 22)
+    btn:SetSize(28, 28)
     btn:SetBackdrop({
         bgFile = "Interface/Buttons/WHITE8x8",
         edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -529,7 +529,7 @@ local function acquireProfessionButton(index)
     btn:SetBackdropColor(0.16, 0.10, 0.10, 0.90)
     btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
-    btn.icon:SetSize(16, 16)
+    btn.icon:SetSize(22, 22)
     btn.icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
     btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -577,7 +577,7 @@ end
 
 local function refreshProfessionSwitcher(activeContext)
     local entries = getProfessionSwitchEntries()
-    local columns = 8
+    local columns = 7
     local x = 8
     local y = -48
 
@@ -594,7 +594,7 @@ local function refreshProfessionSwitcher(activeContext)
     local buttonIndex = 0
     local headerIndex = 0
     local cursor = 0
-    local rowHeight = 24
+    local rowHeight = 30
     local headerHeight = 12
     local sectionGap = 4
 
@@ -617,8 +617,8 @@ local function refreshProfessionSwitcher(activeContext)
             local col = (i - 1) % columns
             local row = math.floor((i - 1) / columns)
             btn:ClearAllPoints()
-            btn:SetPoint("TOPLEFT", ui.panel, "TOPLEFT", x + (col * 26), y - cursor - (row * rowHeight))
-            btn:SetPoint("TOPRIGHT", ui.panel, "TOPLEFT", x + (col * 26) + 22, y - cursor - (row * rowHeight))
+            btn:SetPoint("TOPLEFT", ui.panel, "TOPLEFT", x + (col * 30), y - cursor - (row * rowHeight))
+            btn:SetPoint("TOPRIGHT", ui.panel, "TOPLEFT", x + (col * 30) + 28, y - cursor - (row * rowHeight))
 
             btn.text:SetText("")
             btn.fullLabel = entry.label
