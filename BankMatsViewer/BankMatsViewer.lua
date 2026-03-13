@@ -291,6 +291,14 @@ for _, itemID in ipairs(TRACKED_MATERIAL_ITEM_IDS) do
     TRACKED_MATERIAL_ITEM_ID_LOOKUP[itemID] = true
 end
 
+local IMPORTED_MATERIAL_ITEM_IDS = BankMatsViewerFullCatalogItemIDs or {}
+
+local function addItemIDsToLookup(lookup, itemIDs)
+    for _, itemID in ipairs(itemIDs) do
+        lookup[itemID] = true
+    end
+end
+
 local function getItemName(itemID)
     local name = C_Item.GetItemNameByID(itemID)
     if name and name ~= "" then
@@ -486,9 +494,8 @@ end
 local function getTrackedMaterialsLookup(itemsTable)
     local lookup = {}
 
-    for _, itemID in ipairs(TRACKED_MATERIAL_ITEM_IDS) do
-        lookup[itemID] = true
-    end
+    addItemIDsToLookup(lookup, TRACKED_MATERIAL_ITEM_IDS)
+    addItemIDsToLookup(lookup, IMPORTED_MATERIAL_ITEM_IDS)
 
     for itemID in pairs(itemsTable) do
         lookup[itemID] = true
@@ -499,9 +506,7 @@ end
 
 local function getTrackedOnlyLookup()
     local lookup = {}
-    for _, itemID in ipairs(TRACKED_MATERIAL_ITEM_IDS) do
-        lookup[itemID] = true
-    end
+    addItemIDsToLookup(lookup, TRACKED_MATERIAL_ITEM_IDS)
     return lookup
 end
 
@@ -539,8 +544,10 @@ end
 
 local function seedCatalogFromTrackedList()
     BankMatsViewerDB.catalogItemIDs = BankMatsViewerDB.catalogItemIDs or {}
-    for _, itemID in ipairs(TRACKED_MATERIAL_ITEM_IDS) do
-        BankMatsViewerDB.catalogItemIDs[itemID] = true
+    for _, source in ipairs({ TRACKED_MATERIAL_ITEM_IDS, IMPORTED_MATERIAL_ITEM_IDS }) do
+        for _, itemID in ipairs(source) do
+            BankMatsViewerDB.catalogItemIDs[itemID] = true
+        end
     end
 end
 
@@ -1323,7 +1330,11 @@ frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 
 local pendingItemRequests = 0
 local function requestUncachedItems()
-    for _, itemID in ipairs(TRACKED_MATERIAL_ITEM_IDS) do
+    pendingItemRequests = 0
+    local requestLookup = {}
+    addItemIDsToLookup(requestLookup, TRACKED_MATERIAL_ITEM_IDS)
+    addItemIDsToLookup(requestLookup, IMPORTED_MATERIAL_ITEM_IDS)
+    for itemID in pairs(requestLookup) do
         if not GetItemInfo(itemID) then
             C_Item.RequestLoadItemDataByID(itemID)
             pendingItemRequests = pendingItemRequests + 1
