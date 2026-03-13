@@ -1386,6 +1386,37 @@ local function importAuctionHouseBrowseResults()
     return added
 end
 
+local function importAuctionHouseReplicateResults()
+    if not (C_AuctionHouse and C_AuctionHouse.GetNumReplicateItems and C_AuctionHouse.GetReplicateItemInfo) then
+        return 0, 0
+    end
+
+    BankMatsViewerDB.catalogItemIDs = BankMatsViewerDB.catalogItemIDs or {}
+    local total = C_AuctionHouse.GetNumReplicateItems() or 0
+    local added = 0
+
+    for i = 1, total do
+        local itemID = nil
+        local info = C_AuctionHouse.GetReplicateItemInfo(i)
+        if type(info) == "table" then
+            itemID = info.itemID
+        else
+            -- Legacy tuple return where itemID is the 16th value.
+            itemID = select(16, C_AuctionHouse.GetReplicateItemInfo(i))
+        end
+
+        if type(itemID) == "number" and itemID > 0 and isCraftingMaterialByItemID(itemID) then
+            if not BankMatsViewerDB.catalogItemIDs[itemID] then
+                BankMatsViewerDB.catalogItemIDs[itemID] = true
+                C_Item.RequestLoadItemDataByID(itemID)
+                added = added + 1
+            end
+        end
+    end
+
+    return added, total
+end
+
 SLASH_BANKMATSVIEWER1 = "/bmats"
 SLASH_BANKMATSVIEWER2 = "/bankmats"
 SlashCmdList.BANKMATSVIEWER = function(msg)
@@ -1451,11 +1482,22 @@ SlashCmdList.BANKMATSVIEWER = function(msg)
     end
 
     if arg == "importah" then
-        local added = importAuctionHouseBrowseResults()
-        if added > 0 then
-            refreshWindow()
+        local browseAdded = 0
+        local okBrowse, browseResult = pcall(importAuctionHouseBrowseResults)
+        if okBrowse then
+            browseAdded = browseResult or 0
         end
-        print("|cff33ff99Bank Mats Viewer:|r AH import added " .. tostring(added) .. " items to catalog.")
+
+        if C_AuctionHouse and C_AuctionHouse.ReplicateItems then
+            BankMatsViewerDB.awaitingAHReplicateImport = true
+            C_AuctionHouse.ReplicateItems()
+            print("|cff33ff99Bank Mats Viewer:|r AH replicate import requested... (browse added " .. tostring(browseAdded) .. ")")
+        else
+            if browseAdded > 0 then
+                refreshWindow()
+            end
+            print("|cff33ff99Bank Mats Viewer:|r AH import added " .. tostring(browseAdded) .. " items to catalog.")
+        end
         return
     end
 
@@ -1468,7 +1510,7 @@ SlashCmdList.BANKMATSVIEWER = function(msg)
         print("  /bmats missing N all - List up to N missing full-catalog items")
         print("  /bmats add <id|link>    - Add a missing item to catalog")
         print("  /bmats remove <id|link> - Remove an item from catalog")
-        print("  /bmats importah         - Import current AH browse results")
+        print("  /bmats importah         - Import AH browse + request full AH replicate snapshot")
         return
     end
 
@@ -1482,6 +1524,7 @@ frame:RegisterEvent("BANKFRAME_CLOSED")
 frame:RegisterEvent("BAG_UPDATE_DELAYED")
 frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 frame:RegisterEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+frame:RegisterEvent("REPLICATE_ITEM_LIST_UPDATE")
 
 local pendingItemRequests = 0
 local function requestUncachedItems()
@@ -1557,6 +1600,22 @@ frame:SetScript("OnEvent", function(_, event, arg1)
                 refreshWindow()
             end
             print("|cff33ff99Bank Mats Viewer:|r auto-imported " .. tostring(added) .. " AH items into catalog.")
+        end
+        return
+    end
+
+    if event == "REPLICATE_ITEM_LIST_UPDATE" then
+        if BankMatsViewerDB.awaitingAHReplicateImport then
+            BankMatsViewerDB.awaitingAHReplicateImport = false
+            local added, total = importAuctionHouseReplicateResults()
+            if added > 0 then
+                enrichCatalogFromRecentQualitySiblings(BankMatsViewerDB.items)
+                requestUncachedItems()
+                if ui.frame and ui.frame:IsShown() then
+                    refreshWindow()
+                end
+            end
+            print("|cff33ff99Bank Mats Viewer:|r AH replicate import processed " .. tostring(total) .. " rows, added " .. tostring(added) .. " tradegoods items.")
         end
         return
     end
