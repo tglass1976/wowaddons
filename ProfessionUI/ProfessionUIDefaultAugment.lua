@@ -212,8 +212,11 @@ local function acquireTab(index)
     btn:SetBackdropBorderColor(0.55, 0.16, 0.16, 0.95)
     btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     btn.label:SetPoint("LEFT", btn, "LEFT", 8, 0)
-    btn.label:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
+    btn.label:SetPoint("RIGHT", btn, "RIGHT", -62, 0)
     btn.label:SetJustifyH("LEFT")
+    btn.rankText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    btn.rankText:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
+    btn.rankText:SetJustifyH("RIGHT")
     btn.highlight = btn:CreateTexture(nil, "HIGHLIGHT")
     btn.highlight:SetAllPoints(btn)
     btn.highlight:SetColorTexture(1, 0.85, 0.2, 0.10)
@@ -376,14 +379,16 @@ refreshSideTabs = function()
         btn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, y)
 
         local label = entry.expansionName
+        local rankLabel = ""
         if entry.maxRank and entry.maxRank > 0 then
-            label = string.format("%s  %d/%d", entry.expansionName, entry.rank or 0, entry.maxRank)
+            rankLabel = string.format("%d/%d", entry.rank or 0, entry.maxRank)
         end
         local isPinned = (pinnedExpansion ~= nil and pinnedExpansion == entry.expansionName)
         if isPinned then
             label = "[P] " .. label
         end
         btn.label:SetText(label)
+        btn.rankText:SetText(rankLabel)
         btn.skillLineID = entry.skillLineID
         btn.expansionName = entry.expansionName
         btn.baseProfessionID = baseProfessionID
@@ -393,10 +398,12 @@ refreshSideTabs = function()
         btn.isSelected = isSelected
         if isSelected then
             btn.label:SetTextColor(1, 0.92, 0.35)
+            btn.rankText:SetTextColor(1, 0.92, 0.35)
             btn:SetBackdropColor(0.36, 0.12, 0.12, 0.95)
             btn:SetBackdropBorderColor(0.78, 0.58, 0.18, 0.95)
         else
             btn.label:SetTextColor(0.95, 0.95, 0.95)
+            btn.rankText:SetTextColor(0.86, 0.86, 0.86)
             btn:SetBackdropColor(0.24, 0.06, 0.06, 0.85)
             btn:SetBackdropBorderColor(0.55, 0.16, 0.16, 0.95)
         end
