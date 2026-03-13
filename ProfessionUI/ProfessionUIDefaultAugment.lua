@@ -15,6 +15,7 @@ local ui = {
     title = nil,
     subtitle = nil,
     professionButtons = {},
+    professionSectionHeaders = {},
     joinSeam = nil,
     topSeam = nil,
     bottomSeam = nil,
@@ -491,10 +492,15 @@ local function getProfessionSwitchEntries()
 
                 if isLearned and type(professionID) == "number" and not seen[professionID] then
                     seen[professionID] = true
+                    local section = "Primary"
+                    if professionID == 185 or professionID == 356 or professionID == ARCHAEOLOGY_SKILL_LINE_ID then
+                        section = "Secondary"
+                    end
                     entries[#entries + 1] = {
                         professionID = professionID,
                         skillLineID = skillLineID,
                         label = professionName ~= "" and professionName or tostring(skillLineID),
+                        section = section,
                     }
                 end
             end
@@ -502,6 +508,9 @@ local function getProfessionSwitchEntries()
     end
 
     table.sort(entries, function(a, b)
+        if (a.section or "") ~= (b.section or "") then
+            return a.section == "Primary"
+        end
         return (a.label or "") < (b.label or "")
     end)
 
@@ -555,54 +564,109 @@ local function acquireProfessionButton(index)
     return btn
 end
 
+local function acquireProfessionSectionHeader(index)
+    local header = ui.professionSectionHeaders[index]
+    if header then
+        header:Show()
+        return header
+    end
+
+    header = ui.panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    header:SetJustifyH("LEFT")
+    header:SetTextColor(0.88, 0.76, 0.42)
+    ui.professionSectionHeaders[index] = header
+    return header
+end
+
 local function refreshProfessionSwitcher(activeContext)
     local entries = getProfessionSwitchEntries()
     local columns = 3
     local x = 8
     local y = -48
 
-    for i = 1, #entries do
-        local entry = entries[i]
-        local btn = acquireProfessionButton(i)
-        local col = (i - 1) % columns
-        local row = math.floor((i - 1) / columns)
-        btn:ClearAllPoints()
-        btn:SetPoint("TOPLEFT", ui.panel, "TOPLEFT", x + (col * 76), y - (row * 20))
-        btn:SetPoint("TOPRIGHT", ui.panel, "TOPLEFT", x + (col * 76) + 72, y - (row * 20))
-
-        local label = tostring(entry.label or "")
-        if string.len(label) > 10 then
-            label = string.sub(label, 1, 9) .. "..."
+    local primary = {}
+    local secondary = {}
+    for _, entry in ipairs(entries) do
+        if entry.section == "Secondary" then
+            secondary[#secondary + 1] = entry
+        else
+            primary[#primary + 1] = entry
         end
-        btn.text:SetText(label)
-        btn.fullLabel = entry.label
-        btn.skillLineID = entry.skillLineID
+    end
 
-        local isActive = false
-        if type(activeContext) == "table" then
-            if type(activeContext.professionID) == "number" and activeContext.professionID == entry.professionID then
-                isActive = true
-            elseif type(activeContext.professionName) == "string" and string.lower(activeContext.professionName) == string.lower(entry.label or "") then
-                isActive = true
+    local buttonIndex = 0
+    local headerIndex = 0
+    local cursor = 0
+    local rowHeight = 20
+    local headerHeight = 12
+    local sectionGap = 4
+
+    local function renderSection(sectionName, sectionEntries)
+        if #sectionEntries == 0 then
+            return
+        end
+
+        headerIndex = headerIndex + 1
+        local header = acquireProfessionSectionHeader(headerIndex)
+        header:ClearAllPoints()
+        header:SetPoint("TOPLEFT", ui.panel, "TOPLEFT", x, y - cursor)
+        header:SetText(sectionName)
+        cursor = cursor + headerHeight
+
+        for i = 1, #sectionEntries do
+            local entry = sectionEntries[i]
+            buttonIndex = buttonIndex + 1
+            local btn = acquireProfessionButton(buttonIndex)
+            local col = (i - 1) % columns
+            local row = math.floor((i - 1) / columns)
+            btn:ClearAllPoints()
+            btn:SetPoint("TOPLEFT", ui.panel, "TOPLEFT", x + (col * 76), y - cursor - (row * rowHeight))
+            btn:SetPoint("TOPRIGHT", ui.panel, "TOPLEFT", x + (col * 76) + 72, y - cursor - (row * rowHeight))
+
+            local label = tostring(entry.label or "")
+            if string.len(label) > 10 then
+                label = string.sub(label, 1, 9) .. "..."
+            end
+            btn.text:SetText(label)
+            btn.fullLabel = entry.label
+            btn.skillLineID = entry.skillLineID
+
+            local isActive = false
+            if type(activeContext) == "table" then
+                if type(activeContext.professionID) == "number" and activeContext.professionID == entry.professionID then
+                    isActive = true
+                elseif type(activeContext.professionName) == "string" and string.lower(activeContext.professionName) == string.lower(entry.label or "") then
+                    isActive = true
+                end
+            end
+
+            if isActive then
+                btn:SetBackdropColor(0.29, 0.18, 0.14, 0.96)
+                btn:SetBackdropBorderColor(0.78, 0.58, 0.18, 0.95)
+                btn.text:SetTextColor(1, 0.92, 0.35)
+            else
+                btn:SetBackdropColor(0.16, 0.10, 0.10, 0.90)
+                btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
+                btn.text:SetTextColor(0.95, 0.95, 0.95)
             end
         end
 
-        if isActive then
-            btn:SetBackdropColor(0.29, 0.18, 0.14, 0.96)
-            btn:SetBackdropBorderColor(0.78, 0.58, 0.18, 0.95)
-            btn.text:SetTextColor(1, 0.92, 0.35)
-        else
-            btn:SetBackdropColor(0.16, 0.10, 0.10, 0.90)
-            btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
-            btn.text:SetTextColor(0.95, 0.95, 0.95)
-        end
+        local sectionRows = math.ceil(#sectionEntries / columns)
+        cursor = cursor + (sectionRows * rowHeight) + sectionGap
     end
 
-    for i = #entries + 1, #ui.professionButtons do
+    renderSection("Primary", primary)
+    renderSection("Secondary", secondary)
+
+    for i = buttonIndex + 1, #ui.professionButtons do
         ui.professionButtons[i]:Hide()
     end
 
-    return math.max(1, math.ceil(#entries / columns))
+    for i = headerIndex + 1, #ui.professionSectionHeaders do
+        ui.professionSectionHeaders[i]:Hide()
+    end
+
+    return cursor
 end
 
 local function acquireTab(index)
@@ -858,8 +922,8 @@ refreshSideTabs = function()
         ui.pinAppliedForProfessionID = nil
     end
 
-    local switcherRows = refreshProfessionSwitcher(activeContext)
-    local y = -48 - (switcherRows * 20) - 8
+    local switcherHeight = refreshProfessionSwitcher(activeContext)
+    local y = -48 - switcherHeight - 8
     for i, entry in ipairs(entries) do
         local btn = acquireTab(i)
         btn:ClearAllPoints()
