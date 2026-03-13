@@ -14,10 +14,60 @@ local ui = {
     panel = nil,
     title = nil,
     tabs = {},
+    hooksInstalled = false,
 }
+
+local refreshSideTabs
 
 local function getExpansionSort(expansionName)
     return expansionOrderIndex[expansionName] or 999
+end
+
+local function escapeLuaPattern(text)
+    return (text:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1"))
+end
+
+local function resolveExpansionName(info)
+    if type(info) ~= "table" then
+        return nil
+    end
+
+    if info.expansionName then
+        local normalized = addon.NormalizeExpansionName(info.expansionName)
+        if normalized then
+            return normalized
+        end
+    end
+
+    local candidates = { info.professionName, info.skillLineName }
+    for _, raw in ipairs(candidates) do
+        if type(raw) == "string" and raw ~= "" then
+            local normalized = addon.NormalizeExpansionName(raw)
+            if normalized then
+                return normalized
+            end
+
+            -- Common format: "Cataclysm Leatherworking". Strip profession suffix.
+            if type(info.parentProfessionName) == "string" and info.parentProfessionName ~= "" then
+                local suffixPattern = "%s+" .. escapeLuaPattern(info.parentProfessionName) .. "$"
+                local withoutSuffix = raw:gsub(suffixPattern, "")
+                normalized = addon.NormalizeExpansionName(withoutSuffix)
+                if normalized then
+                    return normalized
+                end
+            end
+
+            -- Alias token search for cases where the full line name includes extra words.
+            local lowerRaw = string.lower(raw)
+            for alias, canonical in pairs(addon.expansionAliases or {}) do
+                if string.find(lowerRaw, string.lower(alias), 1, true) then
+                    return canonical
+                end
+            end
+        end
+    end
+
+    return nil
 end
 
 local function getActiveBaseProfessionID()
@@ -57,8 +107,7 @@ local function getExpansionEntriesForCurrentProfession()
                 local belongsToBase = info.parentProfessionID == baseProfessionID
 
                 if isChildLine and belongsToBase then
-                    local rawName = info.professionName or info.skillLineName or tostring(skillLineID)
-                    local expansionName = addon.NormalizeExpansionName(rawName) or rawName
+                    local expansionName = resolveExpansionName(info) or (info.professionName or info.skillLineName or tostring(skillLineID))
                     local rank = tonumber(info.skillLevel) or 0
                     local maxRank = tonumber(info.maxSkillLevel) or 0
 
@@ -100,17 +149,19 @@ local function acquireTab(index)
     end
 
     btn = CreateFrame("Button", nil, ui.panel, "UIPanelButtonTemplate")
-    btn:SetSize(150, 24)
+    btn:SetSize(196, 22)
     btn:SetScript("OnClick", function(self)
         if not self.skillLineID then
             return
         end
 
-        if C_TradeSkillUI and C_TradeSkillUI.SetProfessionChildSkillLineID then
+        if addon.OpenTradeSkillForLine then
+            addon.OpenTradeSkillForLine(self.skillLineID)
+        elseif C_TradeSkillUI and C_TradeSkillUI.SetProfessionChildSkillLineID then
             C_TradeSkillUI.SetProfessionChildSkillLineID(self.skillLineID)
-        elseif C_TradeSkillUI and C_TradeSkillUI.OpenTradeSkill then
-            C_TradeSkillUI.OpenTradeSkill(self.skillLineID)
         end
+
+        C_Timer.After(0, refreshSideTabs)
     end)
 
     ui.tabs[index] = btn
@@ -128,8 +179,9 @@ local function ensurePanel()
     end
 
     local panel = CreateFrame("Frame", "ProfessionUIExpansionSideTabs", professionsFrame, "BackdropTemplate")
-    panel:SetSize(164, 440)
-    panel:SetPoint("TOPLEFT", professionsFrame, "TOPRIGHT", 8, -28)
+    panel:SetWidth(212)
+    panel:SetPoint("TOPLEFT", professionsFrame, "TOPRIGHT", 10, -26)
+    panel:SetPoint("BOTTOMLEFT", professionsFrame, "BOTTOMRIGHT", 10, 26)
     panel:SetBackdrop({
         bgFile = "Interface/Tooltips/UI-Tooltip-Background",
         edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -153,7 +205,7 @@ local function ensurePanel()
     return panel
 end
 
-local function refreshSideTabs()
+refreshSideTabs = function()
     local panel = ensurePanel()
     if not panel then
         return
@@ -182,8 +234,8 @@ local function refreshSideTabs()
     for i, entry in ipairs(entries) do
         local btn = acquireTab(i)
         btn:ClearAllPoints()
-        btn:SetPoint("TOPLEFT", panel, "TOPLEFT", 7, y)
-        btn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -7, y)
+        btn:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, y)
+        btn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, y)
 
         local label = entry.expansionName
         if entry.maxRank and entry.maxRank > 0 then
@@ -216,14 +268,20 @@ eventFrame:RegisterEvent("ADDON_LOADED")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" and arg1 == "Blizzard_Professions" then
+        if _G.ProfessionsFrame and not ui.hooksInstalled then
+            _G.ProfessionsFrame:HookScript("OnShow", refreshSideTabs)
+            _G.ProfessionsFrame:HookScript("OnHide", refreshSideTabs)
+            ui.hooksInstalled = true
+        end
         C_Timer.After(0, refreshSideTabs)
         return
     end
 
     if event == "PLAYER_LOGIN" then
-        if _G.ProfessionsFrame then
+        if _G.ProfessionsFrame and not ui.hooksInstalled then
             _G.ProfessionsFrame:HookScript("OnShow", refreshSideTabs)
             _G.ProfessionsFrame:HookScript("OnHide", refreshSideTabs)
+            ui.hooksInstalled = true
         end
         C_Timer.After(0, refreshSideTabs)
         return
