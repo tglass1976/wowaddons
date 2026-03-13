@@ -256,14 +256,6 @@ local QUALITY_SORT = {
     ["Unknown"] = 7,
 }
 
-local ITEM_QUALITY_BORDER_ATLASES = {
-    [1] = "Professions-Slot-Frame",
-    [2] = "Professions-Slot-Frame-Green",
-    [3] = "Professions-Slot-Frame-Blue",
-    [4] = "Professions-Slot-Frame-Epic",
-    [5] = "Professions-Slot-Frame-Legendary",
-}
-
 local MATERIAL_SORT = {
     ["Cloth"] = 1,
     ["Herbs"] = 2,
@@ -885,33 +877,36 @@ local function acquireItemButton(index)
     btn = CreateFrame("Button", nil, ui.content)
     btn:SetSize(40, 40)
 
-    -- Match Blizzard bag-slot look.
-    btn.slotBG = btn:CreateTexture(nil, "BACKGROUND")
-    btn.slotBG:SetAllPoints(btn)
-    btn.slotBG:SetTexture("Interface/PaperDoll/UI-Backpack-EmptySlot")
-    btn.slotBG:SetVertexColor(1, 1, 1, 1)
+    -- Slot background, named SlotTexture so SetItemButtonSlotVertexColor works
+    local slotTex = btn:CreateTexture(nil, "BACKGROUND")
+    slotTex:SetTexture("Interface/PaperDoll/UI-Backpack-EmptySlot")
+    slotTex:SetAllPoints(btn)
+    btn.SlotTexture = slotTex
 
-    btn.qualityBorder = btn:CreateTexture(nil, "BORDER")
-    btn.qualityBorder:SetPoint("TOPLEFT", btn, "TOPLEFT", -1, 1)
-    btn.qualityBorder:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 1, -1)
-    btn.qualityBorder:Hide()
+    -- Item icon, named Icon so SetItemButtonTexture / SetItemButtonTextureVertexColor work
+    local iconTex = btn:CreateTexture(nil, "ARTWORK")
+    iconTex:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+    iconTex:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+    iconTex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    btn.Icon = iconTex
+    btn.icon = iconTex  -- some helpers use lowercase
 
-    btn.icon = btn:CreateTexture(nil, "ARTWORK")
-    btn.icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 5, -5)
-    btn.icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -5, 5)
+    -- Quality border, named IconBorder so SetItemButtonQuality works
+    local borderTex = btn:CreateTexture(nil, "OVERLAY")
+    borderTex:SetPoint("TOPLEFT", btn, "TOPLEFT", -1, 1)
+    borderTex:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 1, -1)
+    borderTex:SetTexture("Interface/Common/WhiteIconFrame")
+    borderTex:SetBlendMode("ADD")
+    borderTex:Hide()
+    btn.IconBorder = borderTex
+
+    -- Count text, named Count so SetItemButtonCount works
+    local countStr = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+    countStr:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -3, 3)
+    btn.Count = countStr
+    btn.count = countStr  -- some helpers use lowercase
 
     btn:SetHighlightTexture("Interface/Buttons/ButtonHilight-Square", "ADD")
-
-    btn.countText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
-    btn.countText:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -3, 3)
-
-    btn.qualityBadge = btn:CreateTexture(nil, "OVERLAY")
-    btn.qualityBadge:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
-    btn.qualityBadge:SetSize(16, 16)
-
-    btn.qualityText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    btn.qualityText:SetPoint("TOPLEFT", btn, "TOPLEFT", 3, -2)
-    btn.qualityText:SetTextColor(1, 0.95, 0.3)
 
     btn:SetScript("OnEnter", function(self)
         if not self.itemID then
@@ -1073,12 +1068,30 @@ local function refreshWindow()
                 local btn = acquireItemButton(buttonIndex)
                 local x = 8 + (col * cell)
                 btn:SetPoint("TOPLEFT", ui.content, "TOPLEFT", x, y)
-                btn.icon:SetTexture(row.icon)
-                btn.icon:SetDesaturated(row.isMissing)
-                btn.icon:SetVertexColor(row.isMissing and 0.45 or 1, row.isMissing and 0.45 or 1, row.isMissing and 0.45 or 1)
-                btn.countText:SetText(BreakUpLargeNumbers(row.count))
-                btn.countText:SetTextColor(row.isMissing and 0.7 or 1, row.isMissing and 0.7 or 0.82, row.isMissing and 0.7 or 0)
-                btn.slotBG:SetVertexColor(row.isMissing and 0.65 or 1, row.isMissing and 0.65 or 1, row.isMissing and 0.65 or 1, row.isMissing and 0.9 or 1)
+                SetItemButtonTexture(btn, row.icon)
+                SetItemButtonCount(btn, row.count)
+                SetItemButtonQuality(btn, row.itemQuality, row.itemID)
+                if row.isMissing then
+                    SetItemButtonTextureVertexColor(btn, 0.45, 0.45, 0.45)
+                    SetItemButtonSlotVertexColor(btn, 0.65, 0.65, 0.65)
+                    if btn.IconBorder then
+                        btn.IconBorder:SetAlpha(0.55)
+                    end
+                    if btn.ProfessionQualityOverlay then
+                        btn.ProfessionQualityOverlay:SetAlpha(0.55)
+                    end
+                    btn:SetAlpha(0.85)
+                else
+                    SetItemButtonTextureVertexColor(btn, 1, 1, 1)
+                    SetItemButtonSlotVertexColor(btn, 1, 1, 1)
+                    if btn.IconBorder then
+                        btn.IconBorder:SetAlpha(1)
+                    end
+                    if btn.ProfessionQualityOverlay then
+                        btn.ProfessionQualityOverlay:SetAlpha(1)
+                    end
+                    btn:SetAlpha(1)
+                end
                 btn.itemID = row.itemID
                 btn.itemCount = row.count
                 btn.isMissing = row.isMissing
@@ -1089,30 +1102,6 @@ local function refreshWindow()
                 btn.reagentQualityIconInventory = row.reagentQualityIconInventory
                 btn.reagentQualityIconSmall = row.reagentQualityIconSmall
                 btn.groupLabel = row.materialType
-
-                local borderAtlas = row.itemQuality and ITEM_QUALITY_BORDER_ATLASES[row.itemQuality] or nil
-                if borderAtlas and btn.qualityBorder.SetAtlas then
-                    btn.qualityBorder:SetAtlas(borderAtlas, true)
-                    btn.qualityBorder:SetAlpha(row.isMissing and 0.55 or 1)
-                    btn.qualityBorder:Show()
-                else
-                    btn.qualityBorder:Hide()
-                end
-
-                if row.reagentQualityTier and row.reagentQualityTier > 0 then
-                    if row.reagentQualityIconInventory and btn.qualityBadge.SetAtlas then
-                        btn.qualityBadge:SetAtlas(row.reagentQualityIconInventory, true)
-                        btn.qualityBadge:Show()
-                        btn.qualityText:Hide()
-                    else
-                        btn.qualityBadge:Hide()
-                        btn.qualityText:SetText(tostring(row.reagentQualityTier))
-                        btn.qualityText:Show()
-                    end
-                else
-                    btn.qualityBadge:Hide()
-                    btn.qualityText:Hide()
-                end
 
                 col = col + 1
                 if col >= columns then
