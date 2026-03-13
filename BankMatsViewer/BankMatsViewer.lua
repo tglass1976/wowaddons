@@ -268,7 +268,9 @@ local MATERIAL_SORT = {
     ["Parts"] = 8,
     ["Elemental"] = 9,
     ["Cooking"] = 10,
-    ["Other Reagents"] = 11,
+    ["Finishing Reagents"] = 11,
+    ["Other"] = 12,
+    ["Other Reagents"] = 13,
 }
 
 local ui = {
@@ -472,6 +474,12 @@ local function canonicalizeMaterialFamily(materialType, professionLabel)
     end
     if raw == "cooking" or raw == "meat" then
         return "Cooking"
+    end
+    if raw == "finishing reagents" or raw == "finishing reagent" or raw == "finishing" then
+        return "Finishing Reagents"
+    end
+    if raw == "other" then
+        return "Other"
     end
 
     -- Profession-aware fallback to keep families stable.
@@ -739,6 +747,9 @@ local function buildRowsFromLookup(itemsTable, catalogLookup)
         end
         if a.materialSort ~= b.materialSort then
             return a.materialSort < b.materialSort
+        end
+        if a.materialType ~= b.materialType then
+            return a.materialType < b.materialType
         end
         if a.name ~= b.name then
             return a.name < b.name
