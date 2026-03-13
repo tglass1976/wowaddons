@@ -418,6 +418,57 @@ local function classifyItem(itemID)
     return itemSubType or "Other", "Multi-Profession"
 end
 
+local function canonicalizeMaterialFamily(materialType, professionLabel)
+    local raw = string.lower(strtrim(materialType or "other reagents"))
+
+    if raw == "metal & stone" or raw == "metal and stone" or raw == "metals and stone" then
+        return "Metals and Stone"
+    end
+    if raw == "pigments and ink" or raw == "pigment" or raw == "ink" or raw == "inscription" then
+        return "Pigments and Ink"
+    end
+    if raw == "enchanting" or raw == "enchantment" then
+        return "Enchantment"
+    end
+    if raw == "gem" or raw == "gems" or raw == "jewelcrafting" then
+        return "Gems"
+    end
+    if raw == "herb" or raw == "herbs" then
+        return "Herbs"
+    end
+    if raw == "cloth" then
+        return "Cloth"
+    end
+    if raw == "leather" then
+        return "Leather"
+    end
+    if raw == "parts" or raw == "devices" or raw == "explosives" or raw == "engineering" then
+        return "Parts"
+    end
+    if raw == "elemental" then
+        return "Elemental"
+    end
+    if raw == "cooking" or raw == "meat" then
+        return "Cooking"
+    end
+
+    -- Profession-aware fallback to keep families stable.
+    if professionLabel == "Inscription" then
+        return "Pigments and Ink"
+    end
+    if professionLabel == "Jewelcrafting" then
+        return "Gems"
+    end
+    if professionLabel == "Enchanting" then
+        return "Enchantment"
+    end
+    if professionLabel == "Engineering" then
+        return "Parts"
+    end
+
+    return materialType or "Other Reagents"
+end
+
 local function getTrackedMaterialsLookup(itemsTable)
     local lookup = {}
 
@@ -556,6 +607,7 @@ local function buildRowsFromLookup(itemsTable, catalogLookup)
         if isCraftingMaterialByItemID(itemID) then
             local reagentQualityInfo = getReagentQualityInfo(itemID)
             local materialType, professionLabel = classifyItem(itemID)
+            local materialFamily = canonicalizeMaterialFamily(materialType, professionLabel)
             local expansion = getItemExpansionName(itemID)
             local quality = getItemQualityLabel(itemID)
 
@@ -573,10 +625,10 @@ local function buildRowsFromLookup(itemsTable, catalogLookup)
                 quality = quality,
                 qualitySort = QUALITY_SORT[quality] or 99,
                 profession = professionLabel,
-                materialType = materialType,
-                materialSort = MATERIAL_SORT[materialType] or 99,
+                materialType = materialFamily,
+                materialSort = MATERIAL_SORT[materialFamily] or 99,
                 reagentQualitySort = (reagentQualityInfo and reagentQualityInfo.quality) or 99,
-                groupKey = professionLabel .. "||" .. materialType,
+                groupKey = professionLabel .. "||" .. materialFamily,
             }
         end
     end
@@ -866,7 +918,7 @@ local function refreshWindow()
                         col = 0
                     end
                     currentMaterial = row.materialType
-                    emitHeader("  Material: " .. currentMaterial, 0.72, 0.88, 0.98)
+                    emitHeader("  " .. currentMaterial, 0.72, 0.88, 0.98)
                 end
 
                 buttonIndex = buttonIndex + 1
