@@ -14,8 +14,9 @@ A World of Warcraft addon that shows crafting materials from your Warband Bank i
   - `/bmats`
   - `/bankmats`
   - `/bmats scan` (force a rescan)
-  - `/bmats audit` (print coverage diagnostics in chat)
-  - `/bmats missing N` (print up to `N` missing catalog items)
+  - `/bmats audit` (print tracked vs full-catalog diagnostics in chat)
+  - `/bmats missing N` (print up to `N` missing tracked items)
+  - `/bmats missing N all` (print up to `N` missing full-catalog items, including discovered history)
   - `/bmats help`
 
 ## Install

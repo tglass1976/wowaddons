@@ -418,6 +418,14 @@ local function getTrackedMaterialsLookup(itemsTable)
     return lookup
 end
 
+local function getTrackedOnlyLookup()
+    local lookup = {}
+    for _, itemID in ipairs(TRACKED_MATERIAL_ITEM_IDS) do
+        lookup[itemID] = true
+    end
+    return lookup
+end
+
 local function getCatalogLookup(itemsTable)
     local lookup = getTrackedMaterialsLookup(itemsTable)
 
@@ -499,9 +507,8 @@ local function getActiveItems()
     return {}, 0, 0, 0
 end
 
-local function buildRows(itemsTable)
+local function buildRowsFromLookup(itemsTable, catalogLookup)
     local rows = {}
-    local catalogLookup = getCatalogLookup(itemsTable)
 
     for itemID in pairs(catalogLookup) do
         local count = itemsTable[itemID] or 0
@@ -546,10 +553,15 @@ local function buildRows(itemsTable)
     return rows
 end
 
-local function printAuditReport()
-    local itemsTable = getActiveItems()
-    local rows = buildRows(itemsTable)
+local function buildRows(itemsTable)
+    return buildRowsFromLookup(itemsTable, getCatalogLookup(itemsTable))
+end
 
+local function buildTrackedRows(itemsTable)
+    return buildRowsFromLookup(itemsTable, getTrackedOnlyLookup())
+end
+
+local function summarizeRows(rows)
     local ownedTypes = 0
     local missingTypes = 0
     local unknownExpansion = 0
@@ -574,30 +586,58 @@ local function printAuditReport()
         end
     end
 
-    print("|cff33ff99Bank Mats Viewer Audit|r")
-    print("  Catalog item types: " .. tostring(#rows))
-    print("  Owned item types:   " .. tostring(ownedTypes))
-    print("  Missing item types: " .. tostring(missingTypes))
-    print("  Total units owned:  " .. tostring(ownedUnits))
-    print("  Unknown expansion:  " .. tostring(unknownExpansion))
-    print("  Unknown quality:    " .. tostring(unknownQuality))
+    return {
+        total = #rows,
+        ownedTypes = ownedTypes,
+        missingTypes = missingTypes,
+        unknownExpansion = unknownExpansion,
+        unknownQuality = unknownQuality,
+        ownedUnits = ownedUnits,
+        missingByExpansion = missingByExpansion,
+    }
+end
 
-    print("  Missing by expansion:")
+local function printAuditReport()
+    local itemsTable = getActiveItems()
+    local trackedRows = buildTrackedRows(itemsTable)
+    local allRows = buildRows(itemsTable)
+    local tracked = summarizeRows(trackedRows)
+    local all = summarizeRows(allRows)
+
+    print("|cff33ff99Bank Mats Viewer Audit|r")
+    print("  Tracked catalog:")
+    print("    Item types:       " .. tostring(tracked.total))
+    print("    Owned item types: " .. tostring(tracked.ownedTypes))
+    print("    Missing types:    " .. tostring(tracked.missingTypes))
+    print("    Total units:      " .. tostring(tracked.ownedUnits))
+    print("    Unknown expansion:" .. tostring(tracked.unknownExpansion))
+    print("    Unknown quality:  " .. tostring(tracked.unknownQuality))
+    print("  Full catalog (includes discovered history):")
+    print("    Item types:       " .. tostring(all.total))
+    print("    Owned item types: " .. tostring(all.ownedTypes))
+    print("    Missing types:    " .. tostring(all.missingTypes))
+
+    print("  Tracked missing by expansion:")
     for _, expansionName in ipairs(EXPANSION_SECTION_ORDER) do
-        local missing = missingByExpansion[expansionName] or 0
+        local missing = tracked.missingByExpansion[expansionName] or 0
         if missing > 0 then
             print("    - " .. expansionName .. ": " .. tostring(missing))
         end
     end
 end
 
-local function printMissingItems(limit)
+local function printMissingItems(limit, includeDiscoveredHistory)
     local itemsTable = getActiveItems()
-    local rows = buildRows(itemsTable)
+    local rows = includeDiscoveredHistory and buildRows(itemsTable) or buildTrackedRows(itemsTable)
     local maxItems = tonumber(limit) or 40
     local shown = 0
 
-    print("|cff33ff99Bank Mats Viewer Missing Items|r")
+    if includeDiscoveredHistory then
+        print("|cff33ff99Bank Mats Viewer Missing Items (full catalog)|r")
+    else
+        print("|cff33ff99Bank Mats Viewer Missing Items (tracked catalog)|r")
+    end
+
     for _, row in ipairs(rows) do
         if row.count == 0 then
             print("  [" .. row.expansion .. "] " .. row.name .. " (item:" .. tostring(row.itemID) .. ")")
@@ -609,7 +649,7 @@ local function printMissingItems(limit)
     end
 
     if shown == 0 then
-        print("  No missing items in current catalog.")
+        print("  No missing items in selected catalog.")
     else
         print("  Showing " .. tostring(shown) .. " missing items.")
     end
@@ -859,7 +899,20 @@ SlashCmdList.BANKMATSVIEWER = function(msg)
     end
 
     if arg == "missing" then
-        printMissingItems(rest)
+        local includeDiscoveredHistory = false
+        local maxItems = 40
+
+        for token in string.gmatch(rest or "", "%S+") do
+            local tokenLower = string.lower(token)
+            local n = tonumber(token)
+            if n then
+                maxItems = n
+            elseif tokenLower == "all" then
+                includeDiscoveredHistory = true
+            end
+        end
+
+        printMissingItems(maxItems, includeDiscoveredHistory)
         return
     end
 
@@ -867,8 +920,9 @@ SlashCmdList.BANKMATSVIEWER = function(msg)
         print("|cff33ff99Bank Mats Viewer commands:|r")
         print("  /bmats            - Toggle window")
         print("  /bmats scan       - Scan Warband Bank now")
-        print("  /bmats audit      - Coverage/quality diagnostics")
-        print("  /bmats missing N  - List up to N missing catalog items (default 40)")
+        print("  /bmats audit      - Tracked vs full-catalog diagnostics")
+        print("  /bmats missing N  - List up to N missing tracked items (default 40)")
+        print("  /bmats missing N all - List up to N missing full-catalog items")
         return
     end
 
