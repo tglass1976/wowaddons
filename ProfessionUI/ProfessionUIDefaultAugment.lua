@@ -238,6 +238,7 @@ local function getExpansionEntriesForCurrentProfession()
                                 expansionName = expansionName,
                                 rank = rank,
                                 maxRank = maxRank,
+                                isChildSkillLine = info.parentProfessionID ~= nil,
                             }
                         end
                     end
@@ -319,6 +320,32 @@ local function getArchaeologyRaceEntries()
     end)
 
     return entries
+end
+
+local function switchProfessionSkillLine(skillLineID, isChildSkillLine)
+    if type(skillLineID) ~= "number" then
+        return false
+    end
+
+    if isChildSkillLine and C_TradeSkillUI and C_TradeSkillUI.SetProfessionChildSkillLineID then
+        local switched = pcall(C_TradeSkillUI.SetProfessionChildSkillLineID, skillLineID)
+        if switched then
+            local pf = _G.ProfessionsFrame
+            if pf and type(pf.SetProfessionInfo) == "function" and _G.Professions and type(_G.Professions.GetProfessionInfo) == "function" then
+                local professionInfo = _G.Professions.GetProfessionInfo()
+                local useLastSkillLine = false
+                pcall(pf.SetProfessionInfo, pf, professionInfo, useLastSkillLine)
+            end
+            return true
+        end
+    end
+
+    if addon.OpenTradeSkillForLine then
+        local opened = addon.OpenTradeSkillForLine(skillLineID)
+        return opened == true
+    end
+
+    return false
 end
 
 local function acquireTab(index)
@@ -420,20 +447,7 @@ local function acquireTab(index)
             return
         end
 
-        local switched = false
-        if C_TradeSkillUI and C_TradeSkillUI.SetProfessionChildSkillLineID then
-            switched = pcall(C_TradeSkillUI.SetProfessionChildSkillLineID, self.skillLineID)
-        end
-
-        local pf = _G.ProfessionsFrame
-        if switched and pf and type(pf.SetProfessionInfo) == "function" and _G.Professions and type(_G.Professions.GetProfessionInfo) == "function" then
-            local professionInfo = _G.Professions.GetProfessionInfo()
-            local useLastSkillLine = false
-            pcall(pf.SetProfessionInfo, pf, professionInfo, useLastSkillLine)
-        elseif addon.OpenTradeSkillForLine then
-            -- Fallback for clients where direct frame method path is unavailable.
-            addon.OpenTradeSkillForLine(self.skillLineID)
-        end
+        switchProfessionSkillLine(self.skillLineID, self.isChildSkillLine == true)
 
         C_Timer.After(0, refreshSideTabs)
     end)
@@ -573,15 +587,8 @@ refreshSideTabs = function()
     if not archaeologyMode and pinnedExpansion and ui.pinAppliedForProfessionID ~= activeProfessionID then
         for _, entry in ipairs(entries) do
             if entry.expansionName == pinnedExpansion then
-                if currentChildSkillLineID ~= entry.skillLineID and C_TradeSkillUI and C_TradeSkillUI.SetProfessionChildSkillLineID then
-                    local switched = pcall(C_TradeSkillUI.SetProfessionChildSkillLineID, entry.skillLineID)
-                    if switched then
-                        local pf = _G.ProfessionsFrame
-                        if pf and type(pf.SetProfessionInfo) == "function" and _G.Professions and type(_G.Professions.GetProfessionInfo) == "function" then
-                            local professionInfo = _G.Professions.GetProfessionInfo()
-                            pcall(pf.SetProfessionInfo, pf, professionInfo, false)
-                        end
-                    end
+                if currentChildSkillLineID ~= entry.skillLineID then
+                    switchProfessionSkillLine(entry.skillLineID, entry.isChildSkillLine == true)
                 end
                 ui.pinAppliedForProfessionID = activeProfessionID
                 C_Timer.After(0, refreshSideTabs)
@@ -612,6 +619,7 @@ refreshSideTabs = function()
         btn.label:SetText(label)
         btn.rankText:SetText(rankLabel)
         btn.skillLineID = archaeologyMode and nil or entry.skillLineID
+        btn.isChildSkillLine = archaeologyMode and false or (entry.isChildSkillLine == true)
         btn.expansionName = entry.expansionName
         btn.baseProfessionID = activeProfessionID
         btn.isPinned = archaeologyMode and false or isPinned
