@@ -928,7 +928,14 @@ local function acquireItemButton(index)
         end
 
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetItemByID(self.itemID)
+        local itemName = GetItemInfo(self.itemID)
+        if itemName then
+            GameTooltip:SetItemByID(self.itemID)
+        else
+            GameTooltip:AddLine("Unknown Item", 1, 0.3, 0.3)
+            GameTooltip:AddLine("Item ID: " .. tostring(self.itemID), 0.8, 0.8, 0.8)
+            GameTooltip:AddLine("Not in client cache - may be an invalid ID", 0.7, 0.7, 0.5)
+        end
         GameTooltip:AddLine(" ")
         if self.expansion then
             GameTooltip:AddLine("Expansion: " .. self.expansion, 0.7, 0.85, 1)
