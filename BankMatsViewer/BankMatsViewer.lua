@@ -1060,6 +1060,9 @@ local function refreshWindow()
                         y = y - cell
                         col = 0
                     end
+                    if currentMaterial ~= nil then
+                        y = y - 8  -- extra gap between material sections
+                    end
                     currentMaterial = row.materialType
                     emitHeader(currentMaterial, 0.72, 0.88, 0.98)
                 end
