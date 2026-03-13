@@ -21,6 +21,7 @@ local ui = {
     bottomSeam = nil,
     tabs = {},
     hooksInstalled = false,
+    archaeologyHooksInstalled = false,
     pinAppliedForProfessionID = nil,
 }
 
@@ -911,22 +912,41 @@ local function acquireTab(index)
     return btn
 end
 
-local function ensurePanel()
+local function getActiveAnchorFrame()
     local professionsFrame = _G.ProfessionsFrame
-    if not professionsFrame then
+    if professionsFrame and professionsFrame.IsShown and professionsFrame:IsShown() then
+        return professionsFrame, false
+    end
+
+    local archaeologyFrame = _G.ArchaeologyFrame
+    if archaeologyFrame and archaeologyFrame.IsShown and archaeologyFrame:IsShown() then
+        return archaeologyFrame, true
+    end
+
+    return nil, false
+end
+
+local function ensurePanel(anchorFrame)
+    if not anchorFrame then
         return nil
     end
 
     if ui.panel then
+        ui.panel:SetParent(anchorFrame)
+        ui.panel:ClearAllPoints()
+        ui.panel:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", 0, 0)
+        ui.panel:SetPoint("BOTTOMLEFT", anchorFrame, "BOTTOMRIGHT", 0, 0)
+        ui.panel:SetFrameStrata(anchorFrame:GetFrameStrata())
+        ui.panel:SetFrameLevel(anchorFrame:GetFrameLevel() + 1)
         return ui.panel
     end
 
-    local panel = CreateFrame("Frame", "ProfessionUIExpansionSideTabs", professionsFrame, "BackdropTemplate")
+    local panel = CreateFrame("Frame", "ProfessionUIExpansionSideTabs", anchorFrame, "BackdropTemplate")
     panel:SetWidth(238)
-    panel:SetPoint("TOPLEFT", professionsFrame, "TOPRIGHT", 0, 0)
-    panel:SetPoint("BOTTOMLEFT", professionsFrame, "BOTTOMRIGHT", 0, 0)
-    panel:SetFrameStrata(professionsFrame:GetFrameStrata())
-    panel:SetFrameLevel(professionsFrame:GetFrameLevel() + 1)
+    panel:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", 0, 0)
+    panel:SetPoint("BOTTOMLEFT", anchorFrame, "BOTTOMRIGHT", 0, 0)
+    panel:SetFrameStrata(anchorFrame:GetFrameStrata())
+    panel:SetFrameLevel(anchorFrame:GetFrameLevel() + 1)
     panel:SetBackdrop({
         bgFile = "Interface/Buttons/WHITE8x8",
         edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -987,21 +1007,16 @@ local function ensurePanel()
 end
 
 refreshSideTabs = function()
-    local panel = ensurePanel()
+    local anchorFrame, anchorIsArchaeology = getActiveAnchorFrame()
+    local panel = ensurePanel(anchorFrame)
     if not panel then
         return
     end
 
-    local professionsFrame = _G.ProfessionsFrame
-    if not (professionsFrame and professionsFrame:IsShown()) then
-        panel:Hide()
-        return
-    end
-
     local activeContext = getActiveProfessionContext()
-    local activeProfessionID = activeContext.professionID
+    local activeProfessionID = activeContext.professionID or ARCHAEOLOGY_SKILL_LINE_ID
     local currentChildSkillLineID = activeContext.currentSkillLineID
-    local archaeologyMode = isArchaeologyContext(activeContext)
+    local archaeologyMode = anchorIsArchaeology or isArchaeologyContext(activeContext)
 
     local entries = archaeologyMode and getArchaeologyRaceEntries() or getExpansionEntriesForCurrentProfession()
     if #entries == 0 then
@@ -1137,7 +1152,12 @@ eventFrame:RegisterEvent("ADDON_LOADED")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" and arg1 == "Blizzard_ArchaeologyUI" then
-        installArchaeologyRedirect()
+        if _G.ArchaeologyFrame and not ui.archaeologyHooksInstalled then
+            _G.ArchaeologyFrame:HookScript("OnShow", refreshSideTabs)
+            _G.ArchaeologyFrame:HookScript("OnHide", refreshSideTabs)
+            ui.archaeologyHooksInstalled = true
+        end
+        C_Timer.After(0, refreshSideTabs)
         return
     end
 
@@ -1152,11 +1172,15 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     end
 
     if event == "PLAYER_LOGIN" then
-        installArchaeologyRedirect()
         if _G.ProfessionsFrame and not ui.hooksInstalled then
             _G.ProfessionsFrame:HookScript("OnShow", refreshSideTabs)
             _G.ProfessionsFrame:HookScript("OnHide", refreshSideTabs)
             ui.hooksInstalled = true
+        end
+        if _G.ArchaeologyFrame and not ui.archaeologyHooksInstalled then
+            _G.ArchaeologyFrame:HookScript("OnShow", refreshSideTabs)
+            _G.ArchaeologyFrame:HookScript("OnHide", refreshSideTabs)
+            ui.archaeologyHooksInstalled = true
         end
         C_Timer.After(0, refreshSideTabs)
         return
