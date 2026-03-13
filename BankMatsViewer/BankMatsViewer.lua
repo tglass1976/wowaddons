@@ -198,34 +198,34 @@ local EXPANSION_NAMES = {
 }
 
 local EXPANSION_SORT = {
-    ["Classic"] = 1,
-    ["The Burning Crusade"] = 2,
-    ["Wrath of the Lich King"] = 3,
-    ["Cataclysm"] = 4,
-    ["Mists of Pandaria"] = 5,
-    ["Warlords of Draenor"] = 6,
-    ["Legion"] = 7,
-    ["Battle for Azeroth"] = 8,
-    ["Shadowlands"] = 9,
-    ["Dragonflight"] = 10,
-    ["The War Within"] = 11,
-    ["Midnight"] = 12,
+    ["Midnight"] = 1,
+    ["The War Within"] = 2,
+    ["Dragonflight"] = 3,
+    ["Shadowlands"] = 4,
+    ["Battle for Azeroth"] = 5,
+    ["Legion"] = 6,
+    ["Warlords of Draenor"] = 7,
+    ["Mists of Pandaria"] = 8,
+    ["Cataclysm"] = 9,
+    ["Wrath of the Lich King"] = 10,
+    ["The Burning Crusade"] = 11,
+    ["Classic"] = 12,
     ["Unknown"] = 99,
 }
 
 local EXPANSION_SECTION_ORDER = {
-    "Classic",
-    "The Burning Crusade",
-    "Wrath of the Lich King",
-    "Cataclysm",
-    "Mists of Pandaria",
-    "Warlords of Draenor",
-    "Legion",
-    "Battle for Azeroth",
-    "Shadowlands",
-    "Dragonflight",
-    "The War Within",
     "Midnight",
+    "The War Within",
+    "Dragonflight",
+    "Shadowlands",
+    "Battle for Azeroth",
+    "Legion",
+    "Warlords of Draenor",
+    "Mists of Pandaria",
+    "Cataclysm",
+    "Wrath of the Lich King",
+    "The Burning Crusade",
+    "Classic",
     "Unknown",
 }
 
@@ -536,6 +536,75 @@ local function buildRows(itemsTable)
     return rows
 end
 
+local function printAuditReport()
+    local itemsTable = getActiveItems()
+    local rows = buildRows(itemsTable)
+
+    local ownedTypes = 0
+    local missingTypes = 0
+    local unknownExpansion = 0
+    local unknownQuality = 0
+    local ownedUnits = 0
+    local missingByExpansion = {}
+
+    for _, row in ipairs(rows) do
+        if row.count > 0 then
+            ownedTypes = ownedTypes + 1
+            ownedUnits = ownedUnits + row.count
+        else
+            missingTypes = missingTypes + 1
+            missingByExpansion[row.expansion] = (missingByExpansion[row.expansion] or 0) + 1
+        end
+
+        if row.expansion == "Unknown" then
+            unknownExpansion = unknownExpansion + 1
+        end
+        if row.quality == "Unknown" then
+            unknownQuality = unknownQuality + 1
+        end
+    end
+
+    print("|cff33ff99Bank Mats Viewer Audit|r")
+    print("  Catalog item types: " .. tostring(#rows))
+    print("  Owned item types:   " .. tostring(ownedTypes))
+    print("  Missing item types: " .. tostring(missingTypes))
+    print("  Total units owned:  " .. tostring(ownedUnits))
+    print("  Unknown expansion:  " .. tostring(unknownExpansion))
+    print("  Unknown quality:    " .. tostring(unknownQuality))
+
+    print("  Missing by expansion:")
+    for _, expansionName in ipairs(EXPANSION_SECTION_ORDER) do
+        local missing = missingByExpansion[expansionName] or 0
+        if missing > 0 then
+            print("    - " .. expansionName .. ": " .. tostring(missing))
+        end
+    end
+end
+
+local function printMissingItems(limit)
+    local itemsTable = getActiveItems()
+    local rows = buildRows(itemsTable)
+    local maxItems = tonumber(limit) or 40
+    local shown = 0
+
+    print("|cff33ff99Bank Mats Viewer Missing Items|r")
+    for _, row in ipairs(rows) do
+        if row.count == 0 then
+            print("  [" .. row.expansion .. "] " .. row.name .. " (item:" .. tostring(row.itemID) .. ")")
+            shown = shown + 1
+            if shown >= maxItems then
+                break
+            end
+        end
+    end
+
+    if shown == 0 then
+        print("  No missing items in current catalog.")
+    else
+        print("  Showing " .. tostring(shown) .. " missing items.")
+    end
+end
+
 local function acquireHeader(index)
     local header = ui.groupHeaders[index]
     if header then
@@ -763,11 +832,33 @@ end
 SLASH_BANKMATSVIEWER1 = "/bmats"
 SLASH_BANKMATSVIEWER2 = "/bankmats"
 SlashCmdList.BANKMATSVIEWER = function(msg)
-    local arg = string.lower(strtrim(msg or ""))
+    local trimmed = strtrim(msg or "")
+    local arg, rest = string.match(trimmed, "^(%S+)%s*(.-)$")
+    arg = string.lower(arg or "")
+
     if arg == "scan" then
         runScan()
         refreshWindow()
         print("|cff33ff99Bank Mats Viewer:|r scan complete.")
+        return
+    end
+
+    if arg == "audit" then
+        printAuditReport()
+        return
+    end
+
+    if arg == "missing" then
+        printMissingItems(rest)
+        return
+    end
+
+    if arg == "help" then
+        print("|cff33ff99Bank Mats Viewer commands:|r")
+        print("  /bmats            - Toggle window")
+        print("  /bmats scan       - Scan Warband Bank now")
+        print("  /bmats audit      - Coverage/quality diagnostics")
+        print("  /bmats missing N  - List up to N missing catalog items (default 40)")
         return
     end
 

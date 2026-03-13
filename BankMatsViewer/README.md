@@ -6,16 +6,17 @@ A World of Warcraft addon that shows crafting materials from your Warband Bank i
 
 - Scans Warband Bank tabs while the bank window is open.
 - Shows a GUI inventory grid with item icons and stack counts.
-- Creates sections for each expansion, then organizes by quality, then profession/type.
-- Cloth section includes tracked cloth materials you do not currently own.
-- Missing cloth entries are displayed as greyed-out icons.
-- Shared-use reagents are grouped under `Multi-Profession` instead of a generic crafting label.
-- Midnight test mode is enabled (currently includes all reagent materials while testing).
+- Creates sections for each expansion (newest first).
+- Includes a tracked catalog across major material types (cloth, herbs, ores/metals, leather).
+- Missing catalog entries are displayed as greyed-out icons.
 - Caches latest scan result in saved variables.
 - Slash commands:
   - `/bmats`
   - `/bankmats`
   - `/bmats scan` (force a rescan)
+  - `/bmats audit` (print coverage diagnostics in chat)
+  - `/bmats missing N` (print up to `N` missing catalog items)
+  - `/bmats help`
 
 ## Install
 
@@ -29,5 +30,5 @@ A World of Warcraft addon that shows crafting materials from your Warband Bank i
 - Best results are in modern WoW clients where `C_Item.IsCraftingReagentItem` is available.
 - If item data is not cached yet, some names may appear as `item:<id>` until WoW loads details.
 - Warband tab bag IDs are detected dynamically when possible, with a fallback range for compatibility.
-- The tracked cloth catalog is currently maintained in `BankMatsViewer.lua` (`TRACKED_CLOTH_ITEM_IDS`).
+- The tracked material catalog is maintained in `BankMatsViewer.lua` (`TRACKED_MATERIAL_ITEM_IDS`).
 - The addon keeps a discovered item catalog (`catalogItemIDs`) so comparison views can include previously seen materials, not only currently owned stacks.
