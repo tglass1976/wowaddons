@@ -260,6 +260,32 @@ local function getPinStorage()
     return db.ui.pinnedExpansionByProfessionID
 end
 
+local function getSelectedExpansionStorage()
+    local db = addon.GetDB and addon.GetDB() or nil
+    if type(db) ~= "table" then
+        return nil
+    end
+    db.ui = db.ui or {}
+    db.ui.selectedExpansionByProfessionID = db.ui.selectedExpansionByProfessionID or {}
+    return db.ui.selectedExpansionByProfessionID
+end
+
+local function getLastSelectedExpansion(professionID)
+    local storage = getSelectedExpansionStorage()
+    if not storage or not professionID then
+        return nil
+    end
+    return storage[tostring(professionID)]
+end
+
+local function setLastSelectedExpansion(professionID, expansionName)
+    local storage = getSelectedExpansionStorage()
+    if not storage or not professionID or type(expansionName) ~= "string" or expansionName == "" then
+        return
+    end
+    storage[tostring(professionID)] = expansionName
+end
+
 local function getPinnedExpansion(professionID)
     local storage = getPinStorage()
     if not storage or not professionID then
@@ -712,6 +738,7 @@ local function acquireTab(index)
             print("|cff33ff99ProfessionUI:|r Unpinned " .. tostring(owner.expansionName))
         else
             setPinnedExpansion(owner.baseProfessionID, owner.expansionName)
+            setLastSelectedExpansion(owner.baseProfessionID, owner.expansionName)
             print("|cff33ff99ProfessionUI:|r Pinned " .. tostring(owner.expansionName) .. " for this profession")
         end
         ui.pinAppliedForProfessionID = nil
@@ -760,6 +787,10 @@ local function acquireTab(index)
 
         if not self.skillLineID then
             return
+        end
+
+        if self.baseProfessionID and self.expansionName then
+            setLastSelectedExpansion(self.baseProfessionID, self.expansionName)
         end
 
         switchProfessionSkillLine(self.skillLineID, self.isChildSkillLine == true)
@@ -899,20 +930,21 @@ refreshSideTabs = function()
     end
 
     local pinnedExpansion = archaeologyMode and nil or getPinnedExpansion(activeProfessionID)
-    if not archaeologyMode and pinnedExpansion and ui.pinAppliedForProfessionID ~= activeProfessionID then
+    local desiredExpansion = archaeologyMode and nil or (pinnedExpansion or getLastSelectedExpansion(activeProfessionID))
+    if not archaeologyMode and desiredExpansion then
         for _, entry in ipairs(entries) do
-            if entry.expansionName == pinnedExpansion then
+            if entry.expansionName == desiredExpansion then
                 if currentChildSkillLineID ~= entry.skillLineID then
                     switchProfessionSkillLine(entry.skillLineID, entry.isChildSkillLine == true)
+                    ui.pinAppliedForProfessionID = activeProfessionID
+                    C_Timer.After(0, refreshSideTabs)
+                    return
                 end
-                ui.pinAppliedForProfessionID = activeProfessionID
-                C_Timer.After(0, refreshSideTabs)
-                return
             end
         end
     end
 
-    if archaeologyMode or not pinnedExpansion then
+    if archaeologyMode then
         ui.pinAppliedForProfessionID = nil
     end
 
