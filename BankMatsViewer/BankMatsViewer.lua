@@ -863,19 +863,20 @@ local function acquireItemButton(index)
         return btn
     end
 
-    btn = CreateFrame("Button", nil, ui.content, "BackdropTemplate")
-    btn:SetSize(42, 42)
-    btn:SetBackdrop({
-        bgFile = "Interface/Buttons/WHITE8X8",
-        edgeFile = "Interface/Buttons/WHITE8X8",
-        edgeSize = 1,
-    })
-    btn:SetBackdropColor(0.1, 0.1, 0.12, 0.95)
-    btn:SetBackdropBorderColor(0.25, 0.25, 0.3, 1)
+    btn = CreateFrame("Button", nil, ui.content)
+    btn:SetSize(40, 40)
+
+    -- Match Blizzard bag-slot look.
+    btn.slotBG = btn:CreateTexture(nil, "BACKGROUND")
+    btn.slotBG:SetAllPoints(btn)
+    btn.slotBG:SetTexture("Interface/PaperDoll/UI-Backpack-EmptySlot")
+    btn.slotBG:SetVertexColor(1, 1, 1, 1)
 
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
-    btn.icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 2, -2)
-    btn.icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -2, 2)
+    btn.icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 5, -5)
+    btn.icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -5, 5)
+
+    btn:SetHighlightTexture("Interface/Buttons/ButtonHilight-Square", "ADD")
 
     btn.countText = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     btn.countText:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -3, 3)
@@ -1053,8 +1054,7 @@ local function refreshWindow()
                 btn.icon:SetVertexColor(row.isMissing and 0.45 or 1, row.isMissing and 0.45 or 1, row.isMissing and 0.45 or 1)
                 btn.countText:SetText(BreakUpLargeNumbers(row.count))
                 btn.countText:SetTextColor(row.isMissing and 0.7 or 1, row.isMissing and 0.7 or 0.82, row.isMissing and 0.7 or 0)
-                btn:SetBackdropColor(row.isMissing and 0.06 or 0.1, row.isMissing and 0.06 or 0.1, row.isMissing and 0.08 or 0.12, row.isMissing and 0.75 or 0.95)
-                btn:SetBackdropBorderColor(row.isMissing and 0.18 or 0.25, row.isMissing and 0.18 or 0.25, row.isMissing and 0.2 or 0.3, 1)
+                btn.slotBG:SetVertexColor(row.isMissing and 0.65 or 1, row.isMissing and 0.65 or 1, row.isMissing and 0.65 or 1, row.isMissing and 0.9 or 1)
                 btn.itemID = row.itemID
                 btn.itemCount = row.count
                 btn.isMissing = row.isMissing
