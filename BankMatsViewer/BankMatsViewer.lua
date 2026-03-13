@@ -111,10 +111,8 @@ local TRACKED_MATERIAL_ITEM_IDS = {
     169701, -- Death Blossom
     -- Dragonflight
     191460, -- Hochenblume
-    191461, -- Saxifrage
-    191462, -- Bubble Poppy
-    191463, -- Writhebark
     194255, -- Abyssal Lotus
+    -- Dragonflight herb quality variants and other herbs are discovered dynamically via bank scan
     -- The War Within: herbs discovered dynamically via bank scan
 
     -- ================== ORES / METALS ==================
