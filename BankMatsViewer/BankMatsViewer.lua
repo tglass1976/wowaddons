@@ -716,7 +716,7 @@ end
 
 local function buildDisplayRows(itemsTable)
     if state.showUnowned then
-        return buildRowsFromLookup(itemsTable, getKnownDBLookup(itemsTable))
+        return buildRowsFromLookup(itemsTable, getCatalogLookup(itemsTable))
     end
 
     return buildRowsFromLookup(itemsTable, getOwnedLookup(itemsTable))
@@ -984,7 +984,7 @@ local function refreshWindow()
         end
     end
 
-    local modeText = state.showUnowned and "All known" or "Owned only"
+    local modeText = state.showUnowned and "Tracked + known" or "Owned only"
     local summary = tostring(ownedTypes) .. " / " .. tostring(#rows) .. " material types | " .. modeText .. " | " .. tostring(totalCount) .. " total units"
     if lastScan and lastScan > 0 then
         summary = summary .. " | Last scan: " .. date("%Y-%m-%d %H:%M:%S", lastScan)
