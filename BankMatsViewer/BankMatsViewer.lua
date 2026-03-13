@@ -174,6 +174,7 @@ local TRACKED_MATERIAL_ITEM_IDS = {
 -- Keep explicit overrides for high-confidence catalog items.
 local EXPANSION_OVERRIDES = {
     [13468] = "Classic", -- Black Lotus
+    [6924]  = "Classic", -- Firebloom (slow to cache in modern client)
 }
 
 BankMatsViewerDB = BankMatsViewerDB or {}
