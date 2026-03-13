@@ -156,39 +156,21 @@ local function acquireTab(index)
         end
 
         local switched = false
-        if addon.OpenTradeSkillForLine then
-            local ok, opened = addon.OpenTradeSkillForLine(self.skillLineID)
-            switched = (ok == true and opened ~= false) or (ok == true and opened == nil)
+        if C_TradeSkillUI and C_TradeSkillUI.SetProfessionChildSkillLineID then
+            switched = pcall(C_TradeSkillUI.SetProfessionChildSkillLineID, self.skillLineID)
         end
 
-        -- Fallbacks when helper didn't fully drive Blizzard refresh.
-        if not switched and C_TradeSkillUI and C_TradeSkillUI.SetProfessionChildSkillLineID then
-            local ok = pcall(C_TradeSkillUI.SetProfessionChildSkillLineID, self.skillLineID)
-            switched = ok
+        local pf = _G.ProfessionsFrame
+        if switched and pf and type(pf.SetProfessionInfo) == "function" and _G.Professions and type(_G.Professions.GetProfessionInfo) == "function" then
+            local professionInfo = _G.Professions.GetProfessionInfo()
+            local useLastSkillLine = false
+            pcall(pf.SetProfessionInfo, pf, professionInfo, useLastSkillLine)
+        elseif addon.OpenTradeSkillForLine then
+            -- Fallback for clients where direct frame method path is unavailable.
+            addon.OpenTradeSkillForLine(self.skillLineID)
         end
-        if not switched and C_TradeSkillUI and C_TradeSkillUI.OpenTradeSkill then
-            local ok = pcall(C_TradeSkillUI.OpenTradeSkill, self.skillLineID)
-            switched = ok
-        end
 
-        -- Force the default crafting page to repaint after the skill line switch.
-        C_Timer.After(0, function()
-            local pf = _G.ProfessionsFrame
-            local cp = pf and pf.CraftingPage or nil
-            local rl = cp and cp.RecipeList or nil
-
-            if cp and type(cp.Refresh) == "function" then
-                pcall(cp.Refresh, cp)
-            end
-            if rl and type(rl.Refresh) == "function" then
-                pcall(rl.Refresh, rl)
-            end
-            if pf and type(pf.Refresh) == "function" then
-                pcall(pf.Refresh, pf)
-            end
-
-            refreshSideTabs()
-        end)
+        C_Timer.After(0, refreshSideTabs)
     end)
 
     ui.tabs[index] = btn
