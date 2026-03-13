@@ -517,7 +517,7 @@ local function acquireProfessionButton(index)
     end
 
     btn = CreateFrame("Button", nil, ui.panel, "BackdropTemplate")
-    btn:SetSize(70, 18)
+    btn:SetSize(22, 22)
     btn:SetBackdrop({
         bgFile = "Interface/Buttons/WHITE8x8",
         edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -529,14 +529,14 @@ local function acquireProfessionButton(index)
     btn:SetBackdropColor(0.16, 0.10, 0.10, 0.90)
     btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
-    btn.icon:SetSize(12, 12)
-    btn.icon:SetPoint("LEFT", btn, "LEFT", 3, 0)
+    btn.icon:SetSize(16, 16)
+    btn.icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
     btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    btn.text:SetPoint("LEFT", btn.icon, "RIGHT", 3, 0)
-    btn.text:SetPoint("RIGHT", btn, "RIGHT", -3, 0)
-    btn.text:SetJustifyH("LEFT")
+    btn.text:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    btn.text:SetJustifyH("CENTER")
     btn.text:SetWordWrap(false)
+    btn.text:Hide()
 
     btn:SetScript("OnClick", function(self)
         if not self.skillLineID then
@@ -549,7 +549,7 @@ local function acquireProfessionButton(index)
 
     btn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine(self.fullLabel or self:GetText() or "Profession", 1, 0.92, 0.35)
+        GameTooltip:AddLine(self.fullLabel or "Profession", 1, 0.92, 0.35)
         GameTooltip:AddLine("Switch to this profession without reopening the window.", 0.9, 0.9, 0.9, true)
         GameTooltip:Show()
     end)
@@ -577,7 +577,7 @@ end
 
 local function refreshProfessionSwitcher(activeContext)
     local entries = getProfessionSwitchEntries()
-    local columns = 3
+    local columns = 8
     local x = 8
     local y = -48
 
@@ -594,7 +594,7 @@ local function refreshProfessionSwitcher(activeContext)
     local buttonIndex = 0
     local headerIndex = 0
     local cursor = 0
-    local rowHeight = 20
+    local rowHeight = 24
     local headerHeight = 12
     local sectionGap = 4
 
@@ -617,14 +617,10 @@ local function refreshProfessionSwitcher(activeContext)
             local col = (i - 1) % columns
             local row = math.floor((i - 1) / columns)
             btn:ClearAllPoints()
-            btn:SetPoint("TOPLEFT", ui.panel, "TOPLEFT", x + (col * 76), y - cursor - (row * rowHeight))
-            btn:SetPoint("TOPRIGHT", ui.panel, "TOPLEFT", x + (col * 76) + 72, y - cursor - (row * rowHeight))
+            btn:SetPoint("TOPLEFT", ui.panel, "TOPLEFT", x + (col * 26), y - cursor - (row * rowHeight))
+            btn:SetPoint("TOPRIGHT", ui.panel, "TOPLEFT", x + (col * 26) + 22, y - cursor - (row * rowHeight))
 
-            local label = tostring(entry.label or "")
-            if string.len(label) > 10 then
-                label = string.sub(label, 1, 9) .. "..."
-            end
-            btn.text:SetText(label)
+            btn.text:SetText("")
             btn.fullLabel = entry.label
             btn.skillLineID = entry.skillLineID
             btn.icon:SetTexture(entry.icon or DEFAULT_PROFESSION_ICON)
