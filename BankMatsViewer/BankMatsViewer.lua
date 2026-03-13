@@ -45,10 +45,10 @@ local TRACKED_MATERIAL_ITEM_IDS = {
     8839,   -- Blindweed
     8845,   -- Ghost Mushroom
     8846,   -- Gromsblood
-    13463,  -- Golden Sansam
-    13464,  -- Dreamfoil
-    13466,  -- Mountain Silversage
-    13467,  -- Plaguebloom
+    13463,  -- Dreamfoil
+    13464,  -- Golden Sansam
+    13466,  -- Sorrowmoss
+    13467,  -- Icecap
     13468,  -- Black Lotus
     -- The Burning Crusade
     22785,  -- Felweed
@@ -56,17 +56,17 @@ local TRACKED_MATERIAL_ITEM_IDS = {
     22787,  -- Ragveil
     22789,  -- Terocone
     22790,  -- Ancient Lichen
-    22792,  -- Netherbloom
-    22793,  -- Nightmare Vine
-    22794,  -- Mana Thistle
+    22792,  -- Nightmare Vine
+    22793,  -- Mana Thistle
+    22794,  -- Fel Lotus
     -- Wrath of the Lich King
     36901,  -- Goldclover
     36903,  -- Adder's Tongue
-    36905,  -- Tiger Lily
-    36906,  -- Lichbloom
+    36904,  -- Tiger Lily
+    36905,  -- Lichbloom
+    36906,  -- Icethorn
     36907,  -- Talandra's Rose
-    36908,  -- Icethorn
-    39970,  -- Frost Lotus
+    36908,  -- Frost Lotus
     -- Cataclysm
     52983,  -- Cinderbloom
     52984,  -- Stormvine
@@ -77,16 +77,16 @@ local TRACKED_MATERIAL_ITEM_IDS = {
     -- Mists of Pandaria
     72234,  -- Green Tea Leaf
     72235,  -- Silkweed
-    72237,  -- Snow Lily
-    79010,  -- Fool's Cap
-    79011,  -- Rain Poppy
+    72237,  -- Rain Poppy
+    79010,  -- Snow Lily
+    79011,  -- Fool's Cap
     -- Warlords of Draenor
     109124, -- Frostweed
     109125, -- Fireweed
-    109126, -- Starflower
-    109127, -- Nagrand Arrowbloom
-    109128, -- Talador Orchid
-    109129, -- Gorgrond Flytrap
+    109126, -- Gorgrond Flytrap
+    109127, -- Starflower
+    109128, -- Nagrand Arrowbloom
+    109129, -- Talador Orchid
     -- Legion
     124101, -- Aethril
     124102, -- Dreamleaf
@@ -96,19 +96,19 @@ local TRACKED_MATERIAL_ITEM_IDS = {
     128304, -- Felwort
     -- Battle for Azeroth
     152505, -- Riverbud
+    152506, -- Star Moss
+    152507, -- Akunda's Bite
+    152508, -- Winter's Kiss
+    152509, -- Siren's Pollen
     152510, -- Anchor Weed
     152511, -- Sea Stalk
-    152512, -- Siren's Pollen
-    152513, -- Star Moss
-    152514, -- Winter's Kiss
-    152515, -- Akunda's Bite
+    168487, -- Zin'anthid
     -- Shadowlands
-    168487, -- Nightshade
-    168583, -- Rising Glory
-    168586, -- Death Blossom
-    169699, -- Widowbloom
-    169700, -- Marrowroot
-    169701, -- Vigil's Torch
+    168583, -- Widowbloom
+    168586, -- Rising Glory
+    169699, -- Vigil's Torch Petal
+    169700, -- Death Blossom Petal
+    169701, -- Death Blossom
     -- Dragonflight
     191460, -- Hochenblume
     191461, -- Saxifrage
@@ -137,14 +137,14 @@ local TRACKED_MATERIAL_ITEM_IDS = {
     36910,  -- Titanium Ore
     36912,  -- Saronite Ore
     -- Cataclysm
-    52183,  -- Obsidium Ore
+    52183,  -- Pyrite Ore
     52185,  -- Elementium Ore
-    52186,  -- Pyrite Ore
+    52186,  -- Elementium Bar
     -- Mists of Pandaria
     72092,  -- Ghost Iron Ore
     72093,  -- Kyparite
     72094,  -- Black Trillium Ore
-    72095,  -- White Trillium Ore
+    72095,  -- Trillium Bar
     -- Warlords of Draenor
     109118, -- True Iron Ore
     109119, -- Blackrock Ore
@@ -168,6 +168,12 @@ local TRACKED_MATERIAL_ITEM_IDS = {
     -- Mists of Pandaria
     72436,  -- Exotic Leather
     -- WoD through TWW: leather discovered dynamically via bank scan
+}
+
+-- Some legacy items occasionally report surprising expansion IDs in GetItemInfo.
+-- Keep explicit overrides for high-confidence catalog items.
+local EXPANSION_OVERRIDES = {
+    [13468] = "Classic", -- Black Lotus
 }
 
 BankMatsViewerDB = BankMatsViewerDB or {}
@@ -429,6 +435,10 @@ local function getCatalogLookup(itemsTable)
 end
 
 local function getItemExpansionName(itemID)
+    if EXPANSION_OVERRIDES[itemID] then
+        return EXPANSION_OVERRIDES[itemID]
+    end
+
     -- expacID is the 15th return value of GetItemInfo (not GetItemInfoInstant which has only 7)
     local expacID = select(15, GetItemInfo(itemID))
     if type(expacID) == "number" and EXPANSION_NAMES[expacID] then
