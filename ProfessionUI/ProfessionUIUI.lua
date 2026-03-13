@@ -1407,7 +1407,6 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("SKILL_LINES_CHANGED")
 eventFrame:RegisterEvent("NEW_RECIPE_LEARNED")
 eventFrame:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
-eventFrame:RegisterEvent("ARTIFACT_COMPLETE")
 
 eventFrame:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" and arg1 == addonName then
@@ -1439,14 +1438,6 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         end
         if ui.frame:IsShown() then
             addon.RefreshProfessionWindow()
-        end
-    elseif event == "ARTIFACT_COMPLETE" then
-        if ui.frame:IsShown() then
-            local selected = state.professions[state.selectedProfession]
-            if IsArchaeologyProfessionSafe(selected) then
-                state.archRaces = addon.LoadArchaeologyData()
-                UpdateArchaeologyView()
-            end
         end
     elseif event == "NEW_RECIPE_LEARNED" or event == "TRADE_SKILL_LIST_UPDATE" then
         local selected = state.professions[state.selectedProfession]
