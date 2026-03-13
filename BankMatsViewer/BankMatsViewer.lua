@@ -588,16 +588,16 @@ local function buildRowsFromLookup(itemsTable, catalogLookup)
         if a.materialSort ~= b.materialSort then
             return a.materialSort < b.materialSort
         end
+        if a.name ~= b.name then
+            return a.name < b.name
+        end
         if a.reagentQualitySort ~= b.reagentQualitySort then
             return a.reagentQualitySort < b.reagentQualitySort
         end
         if a.qualitySort ~= b.qualitySort then
             return a.qualitySort < b.qualitySort
         end
-        if a.name == b.name then
-            return a.itemID < b.itemID
-        end
-        return a.name < b.name
+        return a.itemID < b.itemID
     end)
 
     return rows
@@ -858,32 +858,15 @@ local function refreshWindow()
         else
             local col = 0
             local currentMaterial = nil
-            local currentTier = nil
 
             for _, row in ipairs(expansionRows) do
-                local rowTier = row.reagentQualityTier or 0
-
                 if row.materialType ~= currentMaterial then
                     if col > 0 then
                         y = y - cell
                         col = 0
                     end
                     currentMaterial = row.materialType
-                    currentTier = nil
                     emitHeader("  Material: " .. currentMaterial, 0.72, 0.88, 0.98)
-                end
-
-                if rowTier ~= currentTier then
-                    if col > 0 then
-                        y = y - cell
-                        col = 0
-                    end
-                    currentTier = rowTier
-                    if rowTier > 0 then
-                        emitHeader("    Reagent Tier: " .. tostring(rowTier), 0.92, 0.86, 0.42)
-                    else
-                        emitHeader("    Reagent Tier: Standard", 0.65, 0.72, 0.8)
-                    end
                 end
 
                 buttonIndex = buttonIndex + 1
