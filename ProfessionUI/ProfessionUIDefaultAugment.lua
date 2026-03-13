@@ -15,6 +15,7 @@ local ui = {
     title = nil,
     tabs = {},
     hooksInstalled = false,
+    pinAppliedForProfessionID = nil,
 }
 
 local refreshSideTabs
@@ -78,6 +79,40 @@ local function getActiveBaseProfessionID()
         end
     end
     return nil
+end
+
+local function getPinStorage()
+    local db = addon.GetDB and addon.GetDB() or nil
+    if type(db) ~= "table" then
+        return nil
+    end
+    db.ui = db.ui or {}
+    db.ui.pinnedExpansionByProfessionID = db.ui.pinnedExpansionByProfessionID or {}
+    return db.ui.pinnedExpansionByProfessionID
+end
+
+local function getPinnedExpansion(professionID)
+    local storage = getPinStorage()
+    if not storage or not professionID then
+        return nil
+    end
+    return storage[tostring(professionID)]
+end
+
+local function setPinnedExpansion(professionID, expansionName)
+    local storage = getPinStorage()
+    if not storage or not professionID then
+        return
+    end
+    storage[tostring(professionID)] = expansionName
+end
+
+local function clearPinnedExpansion(professionID)
+    local storage = getPinStorage()
+    if not storage or not professionID then
+        return
+    end
+    storage[tostring(professionID)] = nil
 end
 
 local function getExpansionEntriesForCurrentProfession()
@@ -150,8 +185,22 @@ local function acquireTab(index)
 
     btn = CreateFrame("Button", nil, ui.panel, "UIPanelButtonTemplate")
     btn:SetSize(196, 22)
-    btn:SetScript("OnClick", function(self)
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    btn:SetScript("OnClick", function(self, mouseButton)
         if not self.skillLineID then
+            return
+        end
+
+        if mouseButton == "RightButton" then
+            if self.isPinned then
+                clearPinnedExpansion(self.baseProfessionID)
+                print("|cff33ff99ProfessionUI:|r Unpinned " .. tostring(self.expansionName))
+            else
+                setPinnedExpansion(self.baseProfessionID, self.expansionName)
+                print("|cff33ff99ProfessionUI:|r Pinned " .. tostring(self.expansionName) .. " for this profession")
+            end
+            ui.pinAppliedForProfessionID = nil
+            C_Timer.After(0, refreshSideTabs)
             return
         end
 
@@ -234,9 +283,35 @@ refreshSideTabs = function()
 
     panel:Show()
 
+    local baseProfessionID = getActiveBaseProfessionID()
     local currentChildSkillLineID = nil
     if C_TradeSkillUI and C_TradeSkillUI.GetProfessionChildSkillLineID then
         currentChildSkillLineID = C_TradeSkillUI.GetProfessionChildSkillLineID()
+    end
+
+    local pinnedExpansion = getPinnedExpansion(baseProfessionID)
+    if pinnedExpansion and ui.pinAppliedForProfessionID ~= baseProfessionID then
+        for _, entry in ipairs(entries) do
+            if entry.expansionName == pinnedExpansion then
+                if currentChildSkillLineID ~= entry.skillLineID and C_TradeSkillUI and C_TradeSkillUI.SetProfessionChildSkillLineID then
+                    local switched = pcall(C_TradeSkillUI.SetProfessionChildSkillLineID, entry.skillLineID)
+                    if switched then
+                        local pf = _G.ProfessionsFrame
+                        if pf and type(pf.SetProfessionInfo) == "function" and _G.Professions and type(_G.Professions.GetProfessionInfo) == "function" then
+                            local professionInfo = _G.Professions.GetProfessionInfo()
+                            pcall(pf.SetProfessionInfo, pf, professionInfo, false)
+                        end
+                    end
+                end
+                ui.pinAppliedForProfessionID = baseProfessionID
+                C_Timer.After(0, refreshSideTabs)
+                return
+            end
+        end
+    end
+
+    if not pinnedExpansion then
+        ui.pinAppliedForProfessionID = nil
     end
 
     local y = -34
@@ -250,8 +325,15 @@ refreshSideTabs = function()
         if entry.maxRank and entry.maxRank > 0 then
             label = string.format("%s  %d/%d", entry.expansionName, entry.rank or 0, entry.maxRank)
         end
+        local isPinned = (pinnedExpansion ~= nil and pinnedExpansion == entry.expansionName)
+        if isPinned then
+            label = "[P] " .. label
+        end
         btn:SetText(label)
         btn.skillLineID = entry.skillLineID
+        btn.expansionName = entry.expansionName
+        btn.baseProfessionID = baseProfessionID
+        btn.isPinned = isPinned
 
         local isSelected = (currentChildSkillLineID == entry.skillLineID)
         if isSelected then
@@ -294,6 +376,10 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         end
         C_Timer.After(0, refreshSideTabs)
         return
+    end
+
+    if event == "TRADE_SKILL_SHOW" then
+        ui.pinAppliedForProfessionID = nil
     end
 
     C_Timer.After(0, refreshSideTabs)
