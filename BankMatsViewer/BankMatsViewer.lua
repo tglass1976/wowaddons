@@ -463,7 +463,23 @@ local function getItemQualityLabel(itemID)
     return "Unknown"
 end
 
+local function getReagentQualityInfo(itemID)
+    if C_TradeSkillUI and C_TradeSkillUI.GetItemReagentQualityInfo then
+        local info = C_TradeSkillUI.GetItemReagentQualityInfo(itemID)
+        if info and type(info.quality) == "number" and info.quality > 0 then
+            return info
+        end
+    end
+
+    return nil
+end
+
 local function getReagentQualityTier(itemID)
+    local info = getReagentQualityInfo(itemID)
+    if info then
+        return info.quality
+    end
+
     if C_TradeSkillUI and C_TradeSkillUI.GetItemReagentQualityByItemInfo then
         local tier = C_TradeSkillUI.GetItemReagentQualityByItemInfo(itemID)
         if type(tier) == "number" and tier > 0 then
@@ -524,6 +540,7 @@ local function buildRowsFromLookup(itemsTable, catalogLookup)
     for itemID in pairs(catalogLookup) do
         local count = itemsTable[itemID] or 0
         if isCraftingMaterialByItemID(itemID) then
+            local reagentQualityInfo = getReagentQualityInfo(itemID)
             local materialType, professionLabel = classifyItem(itemID)
             local expansion = getItemExpansionName(itemID)
             local quality = getItemQualityLabel(itemID)
@@ -533,7 +550,9 @@ local function buildRowsFromLookup(itemsTable, catalogLookup)
                 count = count,
                 name = getItemName(itemID),
                 icon = getItemIcon(itemID),
-                reagentQualityTier = getReagentQualityTier(itemID),
+                reagentQualityTier = reagentQualityInfo and reagentQualityInfo.quality or getReagentQualityTier(itemID),
+                reagentQualityIconInventory = reagentQualityInfo and reagentQualityInfo.iconInventory or nil,
+                reagentQualityIconSmall = reagentQualityInfo and reagentQualityInfo.iconSmall or nil,
                 isMissing = count == 0,
                 expansion = expansion,
                 expansionSort = EXPANSION_SORT[expansion] or 99,
@@ -728,7 +747,11 @@ local function acquireItemButton(index)
             GameTooltip:AddLine("Quality: " .. self.qualityLabel, 0.85, 0.85, 0.95)
         end
         if self.reagentQualityTier then
-            GameTooltip:AddLine("Reagent Quality Tier: " .. tostring(self.reagentQualityTier), 1, 0.92, 0.35)
+            local qualityLine = "Reagent Quality Tier: " .. tostring(self.reagentQualityTier)
+            if self.reagentQualityIconSmall and CreateAtlasMarkup then
+                qualityLine = CreateAtlasMarkup(self.reagentQualityIconSmall, 16, 16) .. " " .. qualityLine
+            end
+            GameTooltip:AddLine(qualityLine, 1, 0.92, 0.35)
         end
         if self.groupLabel then
             GameTooltip:AddLine("Type: " .. self.groupLabel, 0.8, 0.95, 0.8)
@@ -834,11 +857,13 @@ local function refreshWindow()
                 btn.expansion = row.expansion
                 btn.qualityLabel = row.quality
                 btn.reagentQualityTier = row.reagentQualityTier
+                btn.reagentQualityIconInventory = row.reagentQualityIconInventory
+                btn.reagentQualityIconSmall = row.reagentQualityIconSmall
                 btn.groupLabel = row.profession .. " / " .. row.materialType
 
                 if row.reagentQualityTier and row.reagentQualityTier > 0 then
-                    local atlas = "Professions-Icon-Quality-Tier" .. tostring(row.reagentQualityTier) .. "-Small"
-                    if btn.qualityBadge.SetAtlas and btn.qualityBadge:SetAtlas(atlas, true) then
+                    if row.reagentQualityIconInventory and btn.qualityBadge.SetAtlas then
+                        btn.qualityBadge:SetAtlas(row.reagentQualityIconInventory, true)
                         btn.qualityBadge:Show()
                         btn.qualityText:Hide()
                     else
