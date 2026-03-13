@@ -22,7 +22,7 @@ local TRACKED_MATERIAL_ITEM_IDS = {
     167738, -- Gilded Seaweave (BfA 8.3)
     173202, -- Shrouded Cloth (Shadowlands)
     193922, -- Wildercloth (Dragonflight)
-    213399, -- Weavercloth (The War Within)
+    -- The War Within cloth discovered dynamically via bank scan
 
     -- ================== HERBS ==================
     -- Classic
