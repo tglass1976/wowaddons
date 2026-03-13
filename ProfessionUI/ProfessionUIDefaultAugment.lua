@@ -24,6 +24,9 @@ local ui = {
 
 local refreshSideTabs
 
+local PIN_ICON_LOCKED = "Interface\\Buttons\\LockButton-Locked-Up"
+local PIN_ICON_UNLOCKED = "Interface\\Buttons\\LockButton-Unlocked-Up"
+
 local function getExpansionSort(expansionName)
     return expansionOrderIndex[expansionName] or 999
 end
@@ -219,8 +222,47 @@ local function acquireTab(index)
     btn.leftAccent:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 3, 3)
     btn.leftAccent:SetWidth(2)
     btn.leftAccent:Hide()
+    btn.pinBtn = CreateFrame("Button", nil, btn)
+    btn.pinBtn:SetSize(14, 14)
+    btn.pinBtn:SetPoint("LEFT", btn, "LEFT", 8, 0)
+    btn.pinBtn.icon = btn.pinBtn:CreateTexture(nil, "OVERLAY")
+    btn.pinBtn.icon:SetAllPoints(btn.pinBtn)
+    btn.pinBtn.icon:SetTexture(PIN_ICON_UNLOCKED)
+    btn.pinBtn.icon:SetVertexColor(0.84, 0.84, 0.84, 0.9)
+    btn.pinBtn:SetScript("OnClick", function(pinButton)
+        local owner = pinButton:GetParent()
+        if not owner or not owner.baseProfessionID or not owner.expansionName then
+            return
+        end
+
+        if owner.isPinned then
+            clearPinnedExpansion(owner.baseProfessionID)
+            print("|cff33ff99ProfessionUI:|r Unpinned " .. tostring(owner.expansionName))
+        else
+            setPinnedExpansion(owner.baseProfessionID, owner.expansionName)
+            print("|cff33ff99ProfessionUI:|r Pinned " .. tostring(owner.expansionName) .. " for this profession")
+        end
+        ui.pinAppliedForProfessionID = nil
+        C_Timer.After(0, refreshSideTabs)
+    end)
+    btn.pinBtn:SetScript("OnEnter", function(pinButton)
+        local owner = pinButton:GetParent()
+        local isPinned = owner and owner.isPinned
+        GameTooltip:SetOwner(pinButton, "ANCHOR_RIGHT")
+        if isPinned then
+            GameTooltip:AddLine("Pinned Expansion", 1, 0.92, 0.35)
+            GameTooltip:AddLine("Click to unpin this expansion for this profession.", 0.9, 0.9, 0.9, true)
+        else
+            GameTooltip:AddLine("Pin Expansion", 1, 0.92, 0.35)
+            GameTooltip:AddLine("Click to always open this profession on this expansion.", 0.9, 0.9, 0.9, true)
+        end
+        GameTooltip:Show()
+    end)
+    btn.pinBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
     btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    btn.label:SetPoint("LEFT", btn, "LEFT", 8, 0)
+    btn.label:SetPoint("LEFT", btn, "LEFT", 26, 0)
     btn.label:SetPoint("RIGHT", btn, "RIGHT", -62, 0)
     btn.label:SetJustifyH("LEFT")
     btn.rankText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -229,22 +271,9 @@ local function acquireTab(index)
     btn.highlight = btn:CreateTexture(nil, "HIGHLIGHT")
     btn.highlight:SetAllPoints(btn)
     btn.highlight:SetColorTexture(1, 0.85, 0.2, 0.10)
-    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    btn:SetScript("OnClick", function(self, mouseButton)
+    btn:RegisterForClicks("LeftButtonUp")
+    btn:SetScript("OnClick", function(self)
         if not self.skillLineID then
-            return
-        end
-
-        if mouseButton == "RightButton" then
-            if self.isPinned then
-                clearPinnedExpansion(self.baseProfessionID)
-                print("|cff33ff99ProfessionUI:|r Unpinned " .. tostring(self.expansionName))
-            else
-                setPinnedExpansion(self.baseProfessionID, self.expansionName)
-                print("|cff33ff99ProfessionUI:|r Pinned " .. tostring(self.expansionName) .. " for this profession")
-            end
-            ui.pinAppliedForProfessionID = nil
-            C_Timer.After(0, refreshSideTabs)
             return
         end
 
@@ -331,7 +360,7 @@ local function ensurePanel()
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
     subtitle:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -10, -12)
     subtitle:SetJustifyH("LEFT")
-    subtitle:SetText("R-click to pin")
+    subtitle:SetText("Click lock icon to pin")
     subtitle:SetTextColor(0.78, 0.78, 0.68)
 
     -- Seam lines to visually attach this panel to the default professions frame.
@@ -437,6 +466,7 @@ refreshSideTabs = function()
         btn.baseProfessionID = baseProfessionID
         btn.isPinned = isPinned
         btn.isEvenRow = (i % 2 == 0)
+        btn.pinBtn.icon:SetTexture(isPinned and PIN_ICON_LOCKED or PIN_ICON_UNLOCKED)
 
         local isSelected = (currentChildSkillLineID == entry.skillLineID)
         btn.isSelected = isSelected
@@ -456,6 +486,11 @@ refreshSideTabs = function()
             end
             btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
             btn.leftAccent:Hide()
+        end
+        if isPinned then
+            btn.pinBtn.icon:SetVertexColor(1, 0.92, 0.35, 1)
+        else
+            btn.pinBtn.icon:SetVertexColor(0.84, 0.84, 0.84, 0.9)
         end
 
         y = y - 26
@@ -509,7 +544,7 @@ SlashCmdList["PROFESSIONUIPINS"] = function(msg)
         print("|cff33ff99ProfessionUI pins:|r")
         print("  /puipins clear      - Clear all saved expansion pins")
         print("  /puiclearpins       - Alias for /puipins clear")
-        print("  Tip: Right-click any expansion side tab to pin/unpin it")
+        print("  Tip: Click the lock icon on an expansion row to pin/unpin it")
         return
     end
 
