@@ -282,6 +282,7 @@ local ui = {
     itemButtons = {},
     groupHeaders = {},
     expansionHeaders = {},
+    separators = {},
 }
 
 local TRACKED_MATERIAL_ITEM_ID_LOOKUP = {}
@@ -818,6 +819,19 @@ local function printMissingItems(limit, includeDiscoveredHistory)
     end
 end
 
+local function acquireSeparator(index)
+    local sep = ui.separators[index]
+    if sep then
+        sep:Show()
+        return sep
+    end
+    sep = ui.content:CreateTexture(nil, "ARTWORK")
+    sep:SetHeight(1)
+    sep:SetColorTexture(0.3, 0.3, 0.35, 0.6)
+    ui.separators[index] = sep
+    return sep
+end
+
 local function acquireHeader(index)
     local header = ui.groupHeaders[index]
     if header then
@@ -978,6 +992,9 @@ local function refreshWindow()
     for _, btn in ipairs(ui.itemButtons) do
         btn:Hide()
     end
+    for _, sep in ipairs(ui.separators) do
+        sep:Hide()
+    end
 
     if ui.showUnownedCheck then
         ui.showUnownedCheck:SetChecked(state.showUnowned)
@@ -1002,6 +1019,15 @@ local function refreshWindow()
     for _, row in ipairs(rows) do
         rowsByExpansion[row.expansion] = rowsByExpansion[row.expansion] or {}
         rowsByExpansion[row.expansion][#rowsByExpansion[row.expansion] + 1] = row
+    end
+
+    local separatorIndex = 0
+    local function emitSeparator()
+        separatorIndex = separatorIndex + 1
+        local sep = acquireSeparator(separatorIndex)
+        sep:SetPoint("TOPLEFT", ui.content, "TOPLEFT", 10, y + 1)
+        sep:SetPoint("TOPRIGHT", ui.content, "TOPRIGHT", -14, y + 1)
+        y = y - 8
     end
 
     local function emitHeader(text, r, g, b)
@@ -1061,7 +1087,8 @@ local function refreshWindow()
                         col = 0
                     end
                     if currentMaterial ~= nil then
-                        y = y - 8  -- extra gap between material sections
+                        y = y - 4
+                        emitSeparator()
                     end
                     currentMaterial = row.materialType
                     emitHeader(currentMaterial, 0.72, 0.88, 0.98)
