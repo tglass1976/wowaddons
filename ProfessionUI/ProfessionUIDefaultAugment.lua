@@ -211,8 +211,14 @@ local function acquireTab(index)
         edgeSize = 10,
         insets = { left = 2, right = 2, top = 2, bottom = 2 },
     })
-    btn:SetBackdropColor(0.24, 0.06, 0.06, 0.85)
-    btn:SetBackdropBorderColor(0.55, 0.16, 0.16, 0.95)
+    btn:SetBackdropColor(0.17, 0.10, 0.10, 0.86)
+    btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
+    btn.leftAccent = btn:CreateTexture(nil, "ARTWORK")
+    btn.leftAccent:SetColorTexture(0.88, 0.72, 0.24, 0.95)
+    btn.leftAccent:SetPoint("TOPLEFT", btn, "TOPLEFT", 3, -3)
+    btn.leftAccent:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 3, 3)
+    btn.leftAccent:SetWidth(2)
+    btn.leftAccent:Hide()
     btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     btn.label:SetPoint("LEFT", btn, "LEFT", 8, 0)
     btn.label:SetPoint("RIGHT", btn, "RIGHT", -62, 0)
@@ -262,15 +268,19 @@ local function acquireTab(index)
 
     btn:SetScript("OnEnter", function(self)
         if not self.isSelected then
-            self:SetBackdropColor(0.30, 0.08, 0.08, 0.9)
+            self:SetBackdropColor(0.24, 0.14, 0.14, 0.92)
         end
     end)
 
     btn:SetScript("OnLeave", function(self)
         if self.isSelected then
-            self:SetBackdropColor(0.36, 0.12, 0.12, 0.95)
+            self:SetBackdropColor(0.29, 0.18, 0.14, 0.96)
         else
-            self:SetBackdropColor(0.24, 0.06, 0.06, 0.85)
+            if self.isEvenRow then
+                self:SetBackdropColor(0.19, 0.12, 0.12, 0.86)
+            else
+                self:SetBackdropColor(0.16, 0.10, 0.10, 0.86)
+            end
         end
     end)
 
@@ -302,17 +312,23 @@ local function ensurePanel()
         edgeSize = 14,
         insets = { left = 3, right = 3, top = 3, bottom = 3 },
     })
-    panel:SetBackdropColor(0.07, 0.06, 0.05, 0.92)
-    panel:SetBackdropBorderColor(0.42, 0.35, 0.24, 0.95)
+    panel:SetBackdropColor(0.09, 0.08, 0.07, 0.94)
+    panel:SetBackdropBorderColor(0.45, 0.38, 0.26, 0.95)
+
+    local headerBar = panel:CreateTexture(nil, "ARTWORK")
+    headerBar:SetColorTexture(0.18, 0.14, 0.09, 0.92)
+    headerBar:SetPoint("TOPLEFT", panel, "TOPLEFT", 3, -3)
+    headerBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -3, -3)
+    headerBar:SetHeight(36)
 
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -10)
+    title:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -9)
     title:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -10, -10)
     title:SetJustifyH("LEFT")
     title:SetText("Expansions")
 
     local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
+    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
     subtitle:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -10, -12)
     subtitle:SetJustifyH("LEFT")
     subtitle:SetText("R-click to pin")
@@ -420,19 +436,26 @@ refreshSideTabs = function()
         btn.expansionName = entry.expansionName
         btn.baseProfessionID = baseProfessionID
         btn.isPinned = isPinned
+        btn.isEvenRow = (i % 2 == 0)
 
         local isSelected = (currentChildSkillLineID == entry.skillLineID)
         btn.isSelected = isSelected
         if isSelected then
             btn.label:SetTextColor(1, 0.92, 0.35)
             btn.rankText:SetTextColor(1, 0.92, 0.35)
-            btn:SetBackdropColor(0.36, 0.12, 0.12, 0.95)
+            btn:SetBackdropColor(0.29, 0.18, 0.14, 0.96)
             btn:SetBackdropBorderColor(0.78, 0.58, 0.18, 0.95)
+            btn.leftAccent:Show()
         else
             btn.label:SetTextColor(0.95, 0.95, 0.95)
             btn.rankText:SetTextColor(0.86, 0.86, 0.86)
-            btn:SetBackdropColor(0.24, 0.06, 0.06, 0.85)
-            btn:SetBackdropBorderColor(0.55, 0.16, 0.16, 0.95)
+            if btn.isEvenRow then
+                btn:SetBackdropColor(0.19, 0.12, 0.12, 0.86)
+            else
+                btn:SetBackdropColor(0.16, 0.10, 0.10, 0.86)
+            end
+            btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
+            btn.leftAccent:Hide()
         end
 
         y = y - 26
