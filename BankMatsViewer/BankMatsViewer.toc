@@ -1,0 +1,8 @@
+## Interface: 110005
+## Title: Bank Mats Viewer
+## Notes: View crafting materials stored in your bank and reagent bank.
+## Author: tglass1976
+## Version: 0.1.0
+## SavedVariables: BankMatsViewerDB
+
+BankMatsViewer.lua
