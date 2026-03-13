@@ -14,6 +14,9 @@ local ui = {
     panel = nil,
     title = nil,
     subtitle = nil,
+    joinSeam = nil,
+    topSeam = nil,
+    bottomSeam = nil,
     tabs = {},
     hooksInstalled = false,
     pinAppliedForProfessionID = nil,
@@ -315,9 +318,31 @@ local function ensurePanel()
     subtitle:SetText("R-click to pin")
     subtitle:SetTextColor(0.78, 0.78, 0.68)
 
+    -- Seam lines to visually attach this panel to the default professions frame.
+    local joinSeam = panel:CreateTexture(nil, "BORDER")
+    joinSeam:SetColorTexture(0.56, 0.46, 0.30, 0.65)
+    joinSeam:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -1)
+    joinSeam:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 1)
+    joinSeam:SetWidth(1)
+
+    local topSeam = panel:CreateTexture(nil, "BORDER")
+    topSeam:SetColorTexture(0.56, 0.46, 0.30, 0.45)
+    topSeam:SetPoint("TOPLEFT", panel, "TOPLEFT", 1, 0)
+    topSeam:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -1, 0)
+    topSeam:SetHeight(1)
+
+    local bottomSeam = panel:CreateTexture(nil, "BORDER")
+    bottomSeam:SetColorTexture(0.56, 0.46, 0.30, 0.45)
+    bottomSeam:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 1, 0)
+    bottomSeam:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -1, 0)
+    bottomSeam:SetHeight(1)
+
     ui.panel = panel
     ui.title = title
     ui.subtitle = subtitle
+    ui.joinSeam = joinSeam
+    ui.topSeam = topSeam
+    ui.bottomSeam = bottomSeam
 
     return panel
 end
