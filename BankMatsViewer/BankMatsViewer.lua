@@ -672,30 +672,9 @@ local function refreshWindow()
             emitHeader("  No tracked materials", 0.55, 0.6, 0.68)
             y = y - 4
         else
-            local currentQuality = nil
-            local currentGroupKey = nil
             local col = 0
 
             for _, row in ipairs(expansionRows) do
-                if row.quality ~= currentQuality then
-                    if col > 0 then
-                        y = y - cell
-                        col = 0
-                    end
-                    currentQuality = row.quality
-                    currentGroupKey = nil
-                    emitHeader("  Quality: " .. currentQuality, 0.65, 0.85, 1)
-                end
-
-                if row.groupKey ~= currentGroupKey then
-                    if col > 0 then
-                        y = y - cell
-                        col = 0
-                    end
-                    currentGroupKey = row.groupKey
-                    emitHeader("    " .. row.profession .. " / " .. row.materialType, 0.78, 0.9, 0.6)
-                end
-
                 buttonIndex = buttonIndex + 1
                 local btn = acquireItemButton(buttonIndex)
                 local x = 8 + (col * cell)
