@@ -551,6 +551,44 @@ local function seedCatalogFromTrackedList()
     end
 end
 
+local function enrichCatalogFromRecentQualitySiblings(itemsTable)
+    BankMatsViewerDB.catalogItemIDs = BankMatsViewerDB.catalogItemIDs or {}
+
+    local seedLookup = {}
+    if itemsTable then
+        for itemID in pairs(itemsTable) do
+            seedLookup[itemID] = true
+        end
+    end
+    for itemID in pairs(BankMatsViewerDB.catalogItemIDs) do
+        seedLookup[itemID] = true
+    end
+
+    local added = 0
+    for itemID in pairs(seedLookup) do
+        local expansion = getItemExpansionName(itemID)
+        if expansion == "The War Within" or expansion == "Midnight" then
+            local tier = getReagentQualityTier(itemID)
+            if type(tier) == "number" and tier >= 1 and tier <= 3 then
+                for delta = -2, 2 do
+                    if delta ~= 0 then
+                        local candidate = itemID + delta
+                        if candidate > 0 and not BankMatsViewerDB.catalogItemIDs[candidate] then
+                            local _, _, _, _, _, classID = GetItemInfoInstant(candidate)
+                            if classID == TRADEGOODS_CLASS_ID then
+                                BankMatsViewerDB.catalogItemIDs[candidate] = true
+                                added = added + 1
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return added
+end
+
 local function getOwnedLookup(itemsTable)
     local lookup = {}
     for itemID in pairs(itemsTable) do
@@ -1334,6 +1372,11 @@ local function requestUncachedItems()
     local requestLookup = {}
     addItemIDsToLookup(requestLookup, TRACKED_MATERIAL_ITEM_IDS)
     addItemIDsToLookup(requestLookup, IMPORTED_MATERIAL_ITEM_IDS)
+    if BankMatsViewerDB and BankMatsViewerDB.catalogItemIDs then
+        for itemID in pairs(BankMatsViewerDB.catalogItemIDs) do
+            requestLookup[itemID] = true
+        end
+    end
     for itemID in pairs(requestLookup) do
         if not GetItemInfo(itemID) then
             C_Item.RequestLoadItemDataByID(itemID)
@@ -1366,6 +1409,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         end
         BankMatsViewerDB.collapsedExpansions = BankMatsViewerDB.collapsedExpansions or {}
         seedCatalogFromTrackedList()
+        enrichCatalogFromRecentQualitySiblings(BankMatsViewerDB.items)
         state.showUnowned = BankMatsViewerDB.showUnowned
         state.collapsedExpansions = BankMatsViewerDB.collapsedExpansions
         state.warbandBagIDs = getWarbandBagIDs()
@@ -1390,6 +1434,8 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     if event == "BANKFRAME_OPENED" then
         state.bankOpen = true
         runScan()
+        enrichCatalogFromRecentQualitySiblings(state.items)
+        requestUncachedItems()
         refreshWindow()
         return
     end
@@ -1401,6 +1447,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
 
     if event == "BAG_UPDATE_DELAYED" and state.bankOpen then
         runScan()
+        enrichCatalogFromRecentQualitySiblings(state.items)
         refreshWindow()
     end
 end)
