@@ -83,6 +83,7 @@ local function getActiveProfessionContext()
     local context = {
         professionID = nil,
         currentSkillLineID = nil,
+        professionName = nil,
     }
 
     if C_TradeSkillUI and C_TradeSkillUI.GetBaseProfessionInfo then
@@ -95,6 +96,9 @@ local function getActiveProfessionContext()
             end
             if type(baseInfo.skillLineID) == "number" then
                 context.currentSkillLineID = baseInfo.skillLineID
+            end
+            if type(baseInfo.professionName) == "string" and baseInfo.professionName ~= "" then
+                context.professionName = baseInfo.professionName
             end
         end
     end
@@ -109,6 +113,13 @@ local function getActiveProfessionContext()
             end
             if type(childInfo.skillLineID) == "number" then
                 context.currentSkillLineID = childInfo.skillLineID
+            end
+            if not context.professionName then
+                if type(childInfo.parentProfessionName) == "string" and childInfo.parentProfessionName ~= "" then
+                    context.professionName = childInfo.parentProfessionName
+                elseif type(childInfo.professionName) == "string" and childInfo.professionName ~= "" then
+                    context.professionName = childInfo.professionName
+                end
             end
         end
     end
@@ -125,6 +136,15 @@ local function getActiveProfessionContext()
             end
             if not context.currentSkillLineID and type(pInfo.skillLineID) == "number" then
                 context.currentSkillLineID = pInfo.skillLineID
+            end
+            if not context.professionName then
+                if type(pInfo.parentProfessionName) == "string" and pInfo.parentProfessionName ~= "" then
+                    context.professionName = pInfo.parentProfessionName
+                elseif type(pInfo.professionName) == "string" and pInfo.professionName ~= "" then
+                    context.professionName = pInfo.professionName
+                elseif type(pInfo.skillLineName) == "string" and pInfo.skillLineName ~= "" then
+                    context.professionName = pInfo.skillLineName
+                end
             end
         end
     end
@@ -148,6 +168,83 @@ local function getActiveProfessionContext()
     end
 
     return context
+end
+
+local function lineBelongsToActiveProfession(info, activeContext)
+    if type(info) ~= "table" or type(activeContext) ~= "table" then
+        return false
+    end
+
+    local activeProfessionID = activeContext.professionID
+    if type(activeProfessionID) == "number" then
+        local lineProfessionID = info.parentProfessionID or info.professionID
+        if type(lineProfessionID) == "number" and lineProfessionID == activeProfessionID then
+            return true
+        end
+    end
+
+    local activeName = activeContext.professionName
+    if type(activeName) == "string" and activeName ~= "" then
+        local lowerActiveName = string.lower(activeName)
+        local candidates = {
+            info.parentProfessionName,
+            info.professionName,
+            info.skillLineName,
+        }
+        for _, candidate in ipairs(candidates) do
+            if type(candidate) == "string" and candidate ~= "" then
+                local lowerCandidate = string.lower(candidate)
+                if lowerCandidate == lowerActiveName then
+                    return true
+                end
+                if string.find(lowerCandidate, lowerActiveName, 1, true) then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+local function buildFallbackEntries(activeContext)
+    if type(addon.BuildExpansionDataForProfession) ~= "function" then
+        return {}
+    end
+
+    local prof = {
+        name = activeContext.professionName,
+        skillLine = activeContext.professionID or activeContext.currentSkillLineID,
+    }
+
+    local expansionData = addon.BuildExpansionDataForProfession(prof)
+    if type(expansionData) ~= "table" then
+        return {}
+    end
+
+    local entries = {}
+    for expansionName, data in pairs(expansionData) do
+        if type(data) == "table" and type(data.skillLineID) == "number" then
+            entries[#entries + 1] = {
+                skillLineID = data.skillLineID,
+                expansionName = expansionName,
+                rank = tonumber(data.rank) or 0,
+                maxRank = tonumber(data.maxRank) or 0,
+                isChildSkillLine = true,
+            }
+        end
+    end
+
+    table.sort(entries, function(a, b)
+        local as = getExpansionSort(a.expansionName)
+        local bs = getExpansionSort(b.expansionName)
+        if as ~= bs then
+            return as < bs
+        end
+        return a.expansionName < b.expansionName
+    end)
+
+    return entries
 end
 
 local function getPinStorage()
@@ -206,8 +303,7 @@ local function getExpansionEntriesForCurrentProfession()
     end
 
     local activeContext = getActiveProfessionContext()
-    local activeProfessionID = activeContext.professionID
-    if not activeProfessionID then
+    if not activeContext.professionID and not activeContext.professionName then
         return entries
     end
 
@@ -222,10 +318,7 @@ local function getExpansionEntriesForCurrentProfession()
         if type(skillLineID) == "number" then
             local info = C_TradeSkillUI.GetProfessionInfoBySkillLineID(skillLineID)
             if type(info) == "table" then
-                local lineProfessionID = info.parentProfessionID or info.professionID
-                local belongsToActiveProfession = (type(lineProfessionID) == "number" and lineProfessionID == activeProfessionID)
-
-                if belongsToActiveProfession then
+                if lineBelongsToActiveProfession(info, activeContext) then
                     local expansionName = resolveExpansionName(info)
                     if expansionName then
                         local rank = tonumber(info.skillLevel) or 0
@@ -259,6 +352,10 @@ local function getExpansionEntriesForCurrentProfession()
         end
         return a.expansionName < b.expansionName
     end)
+
+    if #entries == 0 then
+        return buildFallbackEntries(activeContext)
+    end
 
     return entries
 end
