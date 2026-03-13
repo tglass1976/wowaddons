@@ -78,14 +78,75 @@ local function resolveExpansionName(info)
     return nil
 end
 
-local function getActiveBaseProfessionID()
+local function getActiveProfessionContext()
+    local context = {
+        professionID = nil,
+        currentSkillLineID = nil,
+    }
+
     if C_TradeSkillUI and C_TradeSkillUI.GetBaseProfessionInfo then
-        local info = C_TradeSkillUI.GetBaseProfessionInfo()
-        if type(info) == "table" and type(info.professionID) == "number" then
-            return info.professionID
+        local baseInfo = C_TradeSkillUI.GetBaseProfessionInfo()
+        if type(baseInfo) == "table" then
+            if type(baseInfo.professionID) == "number" then
+                context.professionID = baseInfo.professionID
+            elseif type(baseInfo.parentProfessionID) == "number" then
+                context.professionID = baseInfo.parentProfessionID
+            end
+            if type(baseInfo.skillLineID) == "number" then
+                context.currentSkillLineID = baseInfo.skillLineID
+            end
         end
     end
-    return nil
+
+    if not context.professionID and C_TradeSkillUI and C_TradeSkillUI.GetChildProfessionInfo then
+        local childInfo = C_TradeSkillUI.GetChildProfessionInfo()
+        if type(childInfo) == "table" then
+            if type(childInfo.parentProfessionID) == "number" then
+                context.professionID = childInfo.parentProfessionID
+            elseif type(childInfo.professionID) == "number" then
+                context.professionID = childInfo.professionID
+            end
+            if type(childInfo.skillLineID) == "number" then
+                context.currentSkillLineID = childInfo.skillLineID
+            end
+        end
+    end
+
+    if _G.Professions and type(_G.Professions.GetProfessionInfo) == "function" then
+        local pInfo = _G.Professions.GetProfessionInfo()
+        if type(pInfo) == "table" then
+            if not context.professionID then
+                if type(pInfo.parentProfessionID) == "number" then
+                    context.professionID = pInfo.parentProfessionID
+                elseif type(pInfo.professionID) == "number" then
+                    context.professionID = pInfo.professionID
+                end
+            end
+            if not context.currentSkillLineID and type(pInfo.skillLineID) == "number" then
+                context.currentSkillLineID = pInfo.skillLineID
+            end
+        end
+    end
+
+    if not context.currentSkillLineID and C_TradeSkillUI and C_TradeSkillUI.GetProfessionChildSkillLineID then
+        local childSkillLineID = C_TradeSkillUI.GetProfessionChildSkillLineID()
+        if type(childSkillLineID) == "number" then
+            context.currentSkillLineID = childSkillLineID
+        end
+    end
+
+    if not context.professionID and context.currentSkillLineID and C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID then
+        local activeInfo = C_TradeSkillUI.GetProfessionInfoBySkillLineID(context.currentSkillLineID)
+        if type(activeInfo) == "table" then
+            if type(activeInfo.parentProfessionID) == "number" then
+                context.professionID = activeInfo.parentProfessionID
+            elseif type(activeInfo.professionID) == "number" then
+                context.professionID = activeInfo.professionID
+            end
+        end
+    end
+
+    return context
 end
 
 local function getPinStorage()
@@ -143,8 +204,9 @@ local function getExpansionEntriesForCurrentProfession()
         return entries
     end
 
-    local baseProfessionID = getActiveBaseProfessionID()
-    if not baseProfessionID then
+    local activeContext = getActiveProfessionContext()
+    local activeProfessionID = activeContext.professionID
+    if not activeProfessionID then
         return entries
     end
 
@@ -159,22 +221,24 @@ local function getExpansionEntriesForCurrentProfession()
         if type(skillLineID) == "number" then
             local info = C_TradeSkillUI.GetProfessionInfoBySkillLineID(skillLineID)
             if type(info) == "table" then
-                local isChildLine = info.parentProfessionID ~= nil
-                local belongsToBase = info.parentProfessionID == baseProfessionID
+                local lineProfessionID = info.parentProfessionID or info.professionID
+                local belongsToActiveProfession = (type(lineProfessionID) == "number" and lineProfessionID == activeProfessionID)
 
-                if isChildLine and belongsToBase then
-                    local expansionName = resolveExpansionName(info) or (info.professionName or info.skillLineName or tostring(skillLineID))
-                    local rank = tonumber(info.skillLevel) or 0
-                    local maxRank = tonumber(info.maxSkillLevel) or 0
+                if belongsToActiveProfession then
+                    local expansionName = resolveExpansionName(info)
+                    if expansionName then
+                        local rank = tonumber(info.skillLevel) or 0
+                        local maxRank = tonumber(info.maxSkillLevel) or 0
 
-                    local prev = byExpansion[expansionName]
-                    if not prev or rank > (prev.rank or 0) then
-                        byExpansion[expansionName] = {
-                            skillLineID = skillLineID,
-                            expansionName = expansionName,
-                            rank = rank,
-                            maxRank = maxRank,
-                        }
+                        local prev = byExpansion[expansionName]
+                        if not prev or rank > (prev.rank or 0) then
+                            byExpansion[expansionName] = {
+                                skillLineID = skillLineID,
+                                expansionName = expansionName,
+                                rank = rank,
+                                maxRank = maxRank,
+                            }
+                        end
                     end
                 end
             end
@@ -419,14 +483,12 @@ refreshSideTabs = function()
 
     panel:Show()
 
-    local baseProfessionID = getActiveBaseProfessionID()
-    local currentChildSkillLineID = nil
-    if C_TradeSkillUI and C_TradeSkillUI.GetProfessionChildSkillLineID then
-        currentChildSkillLineID = C_TradeSkillUI.GetProfessionChildSkillLineID()
-    end
+    local activeContext = getActiveProfessionContext()
+    local activeProfessionID = activeContext.professionID
+    local currentChildSkillLineID = activeContext.currentSkillLineID
 
-    local pinnedExpansion = getPinnedExpansion(baseProfessionID)
-    if pinnedExpansion and ui.pinAppliedForProfessionID ~= baseProfessionID then
+    local pinnedExpansion = getPinnedExpansion(activeProfessionID)
+    if pinnedExpansion and ui.pinAppliedForProfessionID ~= activeProfessionID then
         for _, entry in ipairs(entries) do
             if entry.expansionName == pinnedExpansion then
                 if currentChildSkillLineID ~= entry.skillLineID and C_TradeSkillUI and C_TradeSkillUI.SetProfessionChildSkillLineID then
@@ -439,7 +501,7 @@ refreshSideTabs = function()
                         end
                     end
                 end
-                ui.pinAppliedForProfessionID = baseProfessionID
+                ui.pinAppliedForProfessionID = activeProfessionID
                 C_Timer.After(0, refreshSideTabs)
                 return
             end
@@ -467,7 +529,7 @@ refreshSideTabs = function()
         btn.rankText:SetText(rankLabel)
         btn.skillLineID = entry.skillLineID
         btn.expansionName = entry.expansionName
-        btn.baseProfessionID = baseProfessionID
+        btn.baseProfessionID = activeProfessionID
         btn.isPinned = isPinned
         btn.isEvenRow = (i % 2 == 0)
         btn.pinBtn.icon:SetTexture(isPinned and PIN_ICON_LOCKED or PIN_ICON_UNLOCKED)
