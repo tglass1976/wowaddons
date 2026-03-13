@@ -8,4 +8,5 @@
 ProfessionUI.lua
 ProfessionUILocalization.lua
 ProfessionUIData.lua
+ProfessionUIDefaultAugment.lua
 ProfessionUIUI.lua
