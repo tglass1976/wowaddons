@@ -1354,6 +1354,38 @@ local function removeCatalogItemID(itemID)
     BankMatsViewerDB.catalogItemIDs[itemID] = nil
 end
 
+local function importAuctionHouseBrowseResults()
+    if not (C_AuctionHouse and C_AuctionHouse.GetBrowseResults) then
+        return 0
+    end
+
+    BankMatsViewerDB.catalogItemIDs = BankMatsViewerDB.catalogItemIDs or {}
+    local browseResults = C_AuctionHouse.GetBrowseResults()
+    if type(browseResults) ~= "table" then
+        return 0
+    end
+
+    local added = 0
+    for _, result in ipairs(browseResults) do
+        local itemKey = result and result.itemKey
+        local itemID = itemKey and itemKey.itemID
+        local classID = itemKey and itemKey.itemClassID
+
+        if type(itemID) == "number" and itemID > 0 then
+            local isTradegoodsClass = (type(classID) == "number" and classID == TRADEGOODS_CLASS_ID)
+            if isTradegoodsClass or isCraftingMaterialByItemID(itemID) then
+                if not BankMatsViewerDB.catalogItemIDs[itemID] then
+                    BankMatsViewerDB.catalogItemIDs[itemID] = true
+                    C_Item.RequestLoadItemDataByID(itemID)
+                    added = added + 1
+                end
+            end
+        end
+    end
+
+    return added
+end
+
 SLASH_BANKMATSVIEWER1 = "/bmats"
 SLASH_BANKMATSVIEWER2 = "/bankmats"
 SlashCmdList.BANKMATSVIEWER = function(msg)
@@ -1418,6 +1450,15 @@ SlashCmdList.BANKMATSVIEWER = function(msg)
         return
     end
 
+    if arg == "importah" then
+        local added = importAuctionHouseBrowseResults()
+        if added > 0 then
+            refreshWindow()
+        end
+        print("|cff33ff99Bank Mats Viewer:|r AH import added " .. tostring(added) .. " items to catalog.")
+        return
+    end
+
     if arg == "help" then
         print("|cff33ff99Bank Mats Viewer commands:|r")
         print("  /bmats            - Toggle window")
@@ -1427,6 +1468,7 @@ SlashCmdList.BANKMATSVIEWER = function(msg)
         print("  /bmats missing N all - List up to N missing full-catalog items")
         print("  /bmats add <id|link>    - Add a missing item to catalog")
         print("  /bmats remove <id|link> - Remove an item from catalog")
+        print("  /bmats importah         - Import current AH browse results")
         return
     end
 
@@ -1439,6 +1481,7 @@ frame:RegisterEvent("BANKFRAME_OPENED")
 frame:RegisterEvent("BANKFRAME_CLOSED")
 frame:RegisterEvent("BAG_UPDATE_DELAYED")
 frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+frame:RegisterEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
 
 local pendingItemRequests = 0
 local function requestUncachedItems()
@@ -1501,6 +1544,19 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         end
         if pendingItemRequests > 0 then
             pendingItemRequests = pendingItemRequests - 1
+        end
+        return
+    end
+
+    if event == "AUCTION_HOUSE_BROWSE_RESULTS_UPDATED" then
+        local added = importAuctionHouseBrowseResults()
+        if added > 0 then
+            enrichCatalogFromRecentQualitySiblings(BankMatsViewerDB.items)
+            requestUncachedItems()
+            if ui.frame and ui.frame:IsShown() then
+                refreshWindow()
+            end
+            print("|cff33ff99Bank Mats Viewer:|r auto-imported " .. tostring(added) .. " AH items into catalog.")
         end
         return
     end
