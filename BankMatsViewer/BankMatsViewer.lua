@@ -1315,8 +1315,33 @@ frame:RegisterEvent("PLAYER_LOGIN")
 frame:RegisterEvent("BANKFRAME_OPENED")
 frame:RegisterEvent("BANKFRAME_CLOSED")
 frame:RegisterEvent("BAG_UPDATE_DELAYED")
+frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 
-frame:SetScript("OnEvent", function(_, event)
+local pendingItemRequests = 0
+local function requestUncachedItems()
+    for _, itemID in ipairs(TRACKED_MATERIAL_ITEM_IDS) do
+        if not GetItemInfo(itemID) then
+            C_Item.RequestLoadItemDataByID(itemID)
+            pendingItemRequests = pendingItemRequests + 1
+        end
+    end
+end
+
+-- Debounce refreshes triggered by GET_ITEM_INFO_RECEIVED so we don't spam on bulk load
+local refreshPending = false
+local refreshTimer = CreateFrame("Frame")
+refreshTimer:Hide()
+refreshTimer:SetScript("OnUpdate", function(self, elapsed)
+    self.elapsed = (self.elapsed or 0) + elapsed
+    if self.elapsed >= 0.5 then
+        self:Hide()
+        self.elapsed = 0
+        refreshPending = false
+        refreshWindow()
+    end
+end)
+
+frame:SetScript("OnEvent", function(_, event, arg1)
     if event == "PLAYER_LOGIN" then
         BankMatsViewerDB = BankMatsViewerDB or {}
         BankMatsViewerDB.items = BankMatsViewerDB.items or {}
@@ -1330,6 +1355,20 @@ frame:SetScript("OnEvent", function(_, event)
         state.collapsedExpansions = BankMatsViewerDB.collapsedExpansions
         state.warbandBagIDs = getWarbandBagIDs()
         createWindow()
+        requestUncachedItems()
+        return
+    end
+
+    if event == "GET_ITEM_INFO_RECEIVED" then
+        -- Only refresh if we were waiting on tracked items and the window is visible
+        if pendingItemRequests > 0 and ui.frame and ui.frame:IsShown() and not refreshPending then
+            refreshPending = true
+            refreshTimer.elapsed = 0
+            refreshTimer:Show()
+        end
+        if pendingItemRequests > 0 then
+            pendingItemRequests = pendingItemRequests - 1
+        end
         return
     end
 
