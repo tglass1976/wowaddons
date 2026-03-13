@@ -38,7 +38,7 @@ local TRACKED_MATERIAL_ITEM_IDS = {
     3358,   -- Khadgar's Whisker
     3818,   -- Fadeleaf
     3821,   -- Goldthorn
-    6924,   -- Firebloom
+    4625,   -- Firebloom
     8831,   -- Purple Lotus
     8836,   -- Arthas' Tears
     8838,   -- Sungrass
@@ -174,7 +174,7 @@ local TRACKED_MATERIAL_ITEM_IDS = {
 -- Keep explicit overrides for high-confidence catalog items.
 local EXPANSION_OVERRIDES = {
     [13468] = "Classic", -- Black Lotus
-    [6924]  = "Classic", -- Firebloom (slow to cache in modern client)
+    [4625]  = "Classic", -- Firebloom
 }
 
 BankMatsViewerDB = BankMatsViewerDB or {}
@@ -1076,17 +1076,20 @@ local function refreshWindow()
 
     for _, expansionName in ipairs(EXPANSION_SECTION_ORDER) do
         local expansionRows = rowsByExpansion[expansionName] or {}
-        emitExpansionHeader(expansionName, #expansionRows)
+        if expansionName == "Unknown" and #expansionRows == 0 then
+            -- Don't render an empty Unknown section.
+        else
+            emitExpansionHeader(expansionName, #expansionRows)
 
-        if state.collapsedExpansions[expansionName] then
-            y = y - 6
-        else
-        if #expansionRows == 0 then
-            emitHeader("  No tracked materials", 0.55, 0.6, 0.68)
-            y = y - 4
-        else
-            local col = 0
-            local currentMaterial = nil
+            if state.collapsedExpansions[expansionName] then
+                y = y - 6
+            else
+            if #expansionRows == 0 then
+                emitHeader("  No tracked materials", 0.55, 0.6, 0.68)
+                y = y - 4
+            else
+                local col = 0
+                local currentMaterial = nil
 
             for _, row in ipairs(expansionRows) do
                 if row.materialType ~= currentMaterial then
@@ -1148,14 +1151,15 @@ local function refreshWindow()
                 end
             end
 
-            if col > 0 then
-                y = y - cell
+                if col > 0 then
+                    y = y - cell
+                end
             end
-        end
 
-        end
+            end
 
-        y = y - 6
+            y = y - 6
+        end
     end
 
     ui.content:SetHeight(math.max(80, -y + 8))
