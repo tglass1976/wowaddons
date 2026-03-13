@@ -286,19 +286,21 @@ local function ensurePanel()
     end
 
     local panel = CreateFrame("Frame", "ProfessionUIExpansionSideTabs", professionsFrame, "BackdropTemplate")
-    panel:SetWidth(212)
-    panel:SetPoint("TOPLEFT", professionsFrame, "TOPRIGHT", 10, -26)
-    panel:SetPoint("BOTTOMLEFT", professionsFrame, "BOTTOMRIGHT", 10, 26)
+    panel:SetWidth(206)
+    panel:SetPoint("TOPLEFT", professionsFrame, "TOPRIGHT", 0, 0)
+    panel:SetPoint("BOTTOMLEFT", professionsFrame, "BOTTOMRIGHT", 0, 0)
+    panel:SetFrameStrata(professionsFrame:GetFrameStrata())
+    panel:SetFrameLevel(professionsFrame:GetFrameLevel() + 1)
     panel:SetBackdrop({
-        bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+        bgFile = "Interface/Buttons/WHITE8x8",
         edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
         tile = true,
         tileSize = 16,
         edgeSize = 14,
         insets = { left = 3, right = 3, top = 3, bottom = 3 },
     })
-    panel:SetBackdropColor(0.05, 0.05, 0.06, 0.9)
-    panel:SetBackdropBorderColor(0.35, 0.35, 0.4, 0.95)
+    panel:SetBackdropColor(0.07, 0.06, 0.05, 0.92)
+    panel:SetBackdropBorderColor(0.42, 0.35, 0.24, 0.95)
 
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -10)
