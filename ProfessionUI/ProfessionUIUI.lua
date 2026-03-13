@@ -14,6 +14,7 @@ local UpdateRecipeList
 local UpdateArchaeologyView
 local SelectProfession
 local ResetMinimapButtonPosition
+local CreateMinimapButton
 
 local function IsArchaeologyProfessionSafe(prof)
     if type(addon.IsArchaeologyProfession) == "function" then

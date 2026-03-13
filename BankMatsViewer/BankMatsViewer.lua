@@ -534,22 +534,6 @@ local function getCatalogLookup(itemsTable)
     return lookup
 end
 
-local function getKnownDBLookup(itemsTable)
-    local lookup = {}
-
-    if BankMatsViewerDB.catalogItemIDs then
-        for itemID in pairs(BankMatsViewerDB.catalogItemIDs) do
-            lookup[itemID] = true
-        end
-    end
-
-    for itemID in pairs(itemsTable) do
-        lookup[itemID] = true
-    end
-
-    return lookup
-end
-
 local function seedCatalogFromTrackedList()
     BankMatsViewerDB.catalogItemIDs = BankMatsViewerDB.catalogItemIDs or {}
     for _, source in ipairs({ TRACKED_MATERIAL_ITEM_IDS, IMPORTED_MATERIAL_ITEM_IDS }) do
