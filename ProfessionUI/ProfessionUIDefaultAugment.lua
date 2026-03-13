@@ -29,6 +29,7 @@ local refreshSideTabs
 local PIN_ICON_LOCKED = "Interface\\Buttons\\LockButton-Locked-Up"
 local PIN_ICON_UNLOCKED = "Interface\\Buttons\\LockButton-Unlocked-Up"
 local ARCHAEOLOGY_SKILL_LINE_ID = 794
+local DEFAULT_PROFESSION_ICON = 134400
 
 local function getExpansionSort(expansionName)
     return expansionOrderIndex[expansionName] or 999
@@ -475,7 +476,7 @@ local function getProfessionSwitchEntries()
             return
         end
 
-        local name, _, _, _, _, _, professionID = GetProfessionInfo(profIndex)
+        local name, texture, _, _, _, _, professionID = GetProfessionInfo(profIndex)
         if type(professionID) ~= "number" or seenByProfessionID[professionID] then
             return
         end
@@ -487,6 +488,7 @@ local function getProfessionSwitchEntries()
             skillLineID = skillLineID,
             label = (type(name) == "string" and name ~= "") and name or tostring(professionID),
             section = section,
+            icon = texture,
         }
     end
 
@@ -526,9 +528,14 @@ local function acquireProfessionButton(index)
     })
     btn:SetBackdropColor(0.16, 0.10, 0.10, 0.90)
     btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
+    btn.icon = btn:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetSize(12, 12)
+    btn.icon:SetPoint("LEFT", btn, "LEFT", 3, 0)
+    btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    btn.text:SetPoint("CENTER", btn, "CENTER", 0, 0)
-    btn.text:SetJustifyH("CENTER")
+    btn.text:SetPoint("LEFT", btn.icon, "RIGHT", 3, 0)
+    btn.text:SetPoint("RIGHT", btn, "RIGHT", -3, 0)
+    btn.text:SetJustifyH("LEFT")
     btn.text:SetWordWrap(false)
 
     btn:SetScript("OnClick", function(self)
@@ -620,6 +627,7 @@ local function refreshProfessionSwitcher(activeContext)
             btn.text:SetText(label)
             btn.fullLabel = entry.label
             btn.skillLineID = entry.skillLineID
+            btn.icon:SetTexture(entry.icon or DEFAULT_PROFESSION_ICON)
 
             local isActive = false
             if type(activeContext) == "table" then
