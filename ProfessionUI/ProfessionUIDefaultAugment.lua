@@ -20,6 +20,8 @@ local ui = {
     topSeam = nil,
     bottomSeam = nil,
     tabs = {},
+    tabScroll = nil,
+    tabContent = nil,
     hooksInstalled = false,
     archaeologyHooksInstalled = false,
     pinAppliedForProfessionID = nil,
@@ -31,6 +33,9 @@ local PIN_ICON_LOCKED = "Interface\\Buttons\\LockButton-Locked-Up"
 local PIN_ICON_UNLOCKED = "Interface\\Buttons\\LockButton-Unlocked-Up"
 local ARCHAEOLOGY_SKILL_LINE_ID = 794
 local DEFAULT_PROFESSION_ICON = 134400
+local DEFAULT_PANEL_WIDTH = 238
+local ARCHAEOLOGY_PANEL_WIDTH = 468
+local TAB_ROW_HEIGHT = 30
 
 local function getExpansionSort(expansionName)
     return expansionOrderIndex[expansionName] or 999
@@ -424,16 +429,27 @@ local function getArchaeologyRaceEntries()
 
     for _, race in ipairs(races) do
         local progressText = ""
-        if (race.numFragRequired or 0) > 0 then
-            progressText = string.format("%d/%d", race.numFragUsed or 0, race.numFragRequired or 0)
+        local completedArtifacts = tonumber(race.completedArtifacts) or 0
+        local totalArtifacts = tonumber(race.totalArtifacts)
+
+        if completedArtifacts < 0 then
+            completedArtifacts = 0
+        end
+
+        if totalArtifacts and totalArtifacts > 0 then
+            if completedArtifacts > totalArtifacts then
+                completedArtifacts = totalArtifacts
+            end
+            progressText = string.format("%d/%d", completedArtifacts, totalArtifacts)
         else
-            progressText = string.format("Solved %d", race.numCompleted or 0)
+            progressText = string.format("%d/?", completedArtifacts)
         end
 
         entries[#entries + 1] = {
             expansionName = race.raceName or "Unknown Race",
             rankLabel = progressText,
             isArchaeologyRace = true,
+            raceIndex = race.raceIndex,
             canSolve = race.canSolve == true,
         }
     end
@@ -446,6 +462,61 @@ local function getArchaeologyRaceEntries()
     end)
 
     return entries
+end
+
+local function openArchaeologyCompletedForRace(raceIndex)
+    if type(raceIndex) ~= "number" then
+        return false
+    end
+
+    local selected = false
+    if type(_G.SetSelectedArtifactRace) == "function" then
+        local ok = pcall(_G.SetSelectedArtifactRace, raceIndex)
+        selected = ok or selected
+    elseif C_Archaeology and type(C_Archaeology.SetSelectedArtifactRace) == "function" then
+        local ok = pcall(C_Archaeology.SetSelectedArtifactRace, raceIndex)
+        selected = ok or selected
+    end
+
+    local switched = false
+    local switchers = {
+        _G.ArchaeologyFrame_ShowArtifact,
+        _G.ArchaeologyFrame_ShowArtifacts,
+        _G.ArchaeologyFrame_ShowCompletedArtifacts,
+    }
+    for _, fn in ipairs(switchers) do
+        if type(fn) == "function" then
+            local ok = pcall(fn)
+            if ok then
+                switched = true
+                break
+            end
+        end
+    end
+
+    local buttonCandidates = {
+        "ArchaeologyFrameArtifactPageButton",
+        "ArchaeologyFrameArtifactsButton",
+        "ArchaeologyFrameCompletedArtifactsButton",
+    }
+    for _, buttonName in ipairs(buttonCandidates) do
+        local btn = _G[buttonName]
+        if btn and type(btn.Click) == "function" and btn.IsShown and btn:IsShown() then
+            local ok = pcall(btn.Click, btn)
+            if ok then
+                switched = true
+                break
+            end
+        end
+    end
+
+    if type(_G.SetSelectedArtifactRace) == "function" then
+        pcall(_G.SetSelectedArtifactRace, raceIndex)
+    elseif C_Archaeology and type(C_Archaeology.SetSelectedArtifactRace) == "function" then
+        pcall(C_Archaeology.SetSelectedArtifactRace, raceIndex)
+    end
+
+    return selected or switched
 end
 
 local function switchProfessionSkillLine(skillLineID, isChildSkillLine)
@@ -536,12 +607,9 @@ end
 
 local function installArchaeologyRedirect()
     if type(_G.ToggleArchaeology) == "function" and not ui.archaeologyTogglePatched then
-        ui.originalToggleArchaeology = _G.ToggleArchaeology
-        _G.ToggleArchaeology = function(...)
-            local result = ui.originalToggleArchaeology(...)
+        hooksecurefunc("ToggleArchaeology", function()
             triggerArchaeologyRedirect(1)
-            return result
-        end
+        end)
         ui.archaeologyTogglePatched = true
     end
 
@@ -661,15 +729,8 @@ local function acquireProfessionButton(index)
         C_Timer.After(0, refreshSideTabs)
     end)
 
-    btn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine(self.fullLabel or "Profession", 1, 0.92, 0.35)
-        GameTooltip:AddLine("Switch to this profession.", 0.9, 0.9, 0.9, true)
-        GameTooltip:Show()
-    end)
-    btn:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
+    btn:SetScript("OnEnter", nil)
+    btn:SetScript("OnLeave", nil)
 
     ui.professionButtons[index] = btn
     return btn
@@ -788,7 +849,8 @@ local function acquireTab(index)
         return btn
     end
 
-    btn = CreateFrame("Button", nil, ui.panel, "BackdropTemplate")
+    local parent = ui.tabContent or ui.panel
+    btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
     btn:SetSize(228, 26)
     btn:SetBackdrop({
         bgFile = "Interface/Buttons/WHITE8x8",
@@ -836,22 +898,8 @@ local function acquireTab(index)
         ui.pinAppliedForProfessionID = nil
         C_Timer.After(0, refreshSideTabs)
     end)
-    btn.pinBtn:SetScript("OnEnter", function(pinButton)
-        local owner = pinButton:GetParent()
-        local isPinned = owner and owner.isPinned
-        GameTooltip:SetOwner(pinButton, "ANCHOR_RIGHT")
-        if isPinned then
-            GameTooltip:AddLine("Pinned Expansion", 1, 0.92, 0.35)
-            GameTooltip:AddLine("Click to unpin this expansion for this profession.", 0.9, 0.9, 0.9, true)
-        else
-            GameTooltip:AddLine("Pin Expansion", 1, 0.92, 0.35)
-            GameTooltip:AddLine("Click to always open this profession on this expansion.", 0.9, 0.9, 0.9, true)
-        end
-        GameTooltip:Show()
-    end)
-    btn.pinBtn:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
+    btn.pinBtn:SetScript("OnEnter", nil)
+    btn.pinBtn:SetScript("OnLeave", nil)
     btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     btn.label:SetPoint("LEFT", btn, "LEFT", 32, 0)
     btn.label:SetPoint("RIGHT", btn, "RIGHT", -62, 0)
@@ -866,13 +914,9 @@ local function acquireTab(index)
     btn:RegisterForClicks("LeftButtonUp")
     btn:SetScript("OnClick", function(self)
         if self.isArchaeologyRace then
-            if self.canSolve then
-                if C_Archaeology and C_Archaeology.SolveArtifact then
-                    pcall(C_Archaeology.SolveArtifact)
-                elseif SolveArtifact then
-                    pcall(SolveArtifact)
-                end
-                C_Timer.After(0.15, refreshSideTabs)
+            if self.raceIndex then
+                openArchaeologyCompletedForRace(self.raceIndex)
+                C_Timer.After(0.05, refreshSideTabs)
             end
             return
         end
@@ -913,40 +957,105 @@ local function acquireTab(index)
 end
 
 local function getActiveAnchorFrame()
-    local professionsFrame = _G.ProfessionsFrame
-    if professionsFrame and professionsFrame.IsShown and professionsFrame:IsShown() then
-        return professionsFrame, false
-    end
-
     local archaeologyFrame = _G.ArchaeologyFrame
     if archaeologyFrame and archaeologyFrame.IsShown and archaeologyFrame:IsShown() then
         return archaeologyFrame, true
     end
 
+    local professionsFrame = _G.ProfessionsFrame
+    if professionsFrame and professionsFrame.IsShown and professionsFrame:IsShown() then
+        return professionsFrame, false
+    end
+
     return nil, false
 end
 
-local function ensurePanel(anchorFrame)
+local function shouldAttachLeft(anchorFrame, preferLeft)
+    if not anchorFrame then
+        return false
+    end
+
+    if not preferLeft then
+        return false
+    end
+
+    local panelWidth = (ui.panel and ui.panel.GetWidth and ui.panel:GetWidth()) or 238
+    local left = anchorFrame.GetLeft and anchorFrame:GetLeft() or nil
+    if type(left) == "number" and left < (panelWidth + 6) then
+        return false
+    end
+
+    return true
+end
+
+local function setPanelAttachment(anchorFrame, attachLeft)
+    if not (ui.panel and anchorFrame) then
+        return
+    end
+
+    ui.panel:SetParent(anchorFrame)
+    ui.panel:ClearAllPoints()
+    if attachLeft then
+        ui.panel:SetPoint("TOPRIGHT", anchorFrame, "TOPLEFT", 0, 0)
+        ui.panel:SetPoint("BOTTOMRIGHT", anchorFrame, "BOTTOMLEFT", 0, 0)
+
+        if ui.joinSeam then
+            ui.joinSeam:ClearAllPoints()
+            ui.joinSeam:SetPoint("TOPRIGHT", ui.panel, "TOPRIGHT", 0, -1)
+            ui.joinSeam:SetPoint("BOTTOMRIGHT", ui.panel, "BOTTOMRIGHT", 0, 1)
+            ui.joinSeam:SetWidth(1)
+        end
+    else
+        local rightGap = 0
+        if anchorFrame == _G.ArchaeologyFrame then
+            -- Keep clear of archaeology's protruding right-side ornament/buttons.
+            rightGap = 12
+        end
+
+        ui.panel:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", rightGap, 0)
+        ui.panel:SetPoint("BOTTOMLEFT", anchorFrame, "BOTTOMRIGHT", rightGap, 0)
+
+        if ui.joinSeam then
+            ui.joinSeam:ClearAllPoints()
+            ui.joinSeam:SetPoint("TOPLEFT", ui.panel, "TOPLEFT", 0, -1)
+            ui.joinSeam:SetPoint("BOTTOMLEFT", ui.panel, "BOTTOMLEFT", 0, 1)
+            ui.joinSeam:SetWidth(1)
+        end
+    end
+
+    ui.panel:SetFrameStrata(anchorFrame:GetFrameStrata())
+    ui.panel:SetFrameLevel(anchorFrame:GetFrameLevel() + 1)
+end
+
+local function setPanelWidth(panelWidth)
+    if not ui.panel then
+        return
+    end
+
+    panelWidth = tonumber(panelWidth) or DEFAULT_PANEL_WIDTH
+    if panelWidth < DEFAULT_PANEL_WIDTH then
+        panelWidth = DEFAULT_PANEL_WIDTH
+    end
+
+    ui.panel:SetWidth(panelWidth)
+    if ui.tabContent then
+        local contentWidth = math.max(1, panelWidth - 16)
+        ui.tabContent:SetWidth(contentWidth)
+    end
+end
+
+local function ensurePanel(anchorFrame, attachLeft)
     if not anchorFrame then
         return nil
     end
 
     if ui.panel then
-        ui.panel:SetParent(anchorFrame)
-        ui.panel:ClearAllPoints()
-        ui.panel:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", 0, 0)
-        ui.panel:SetPoint("BOTTOMLEFT", anchorFrame, "BOTTOMRIGHT", 0, 0)
-        ui.panel:SetFrameStrata(anchorFrame:GetFrameStrata())
-        ui.panel:SetFrameLevel(anchorFrame:GetFrameLevel() + 1)
+        setPanelAttachment(anchorFrame, shouldAttachLeft(anchorFrame, attachLeft))
         return ui.panel
     end
 
     local panel = CreateFrame("Frame", "ProfessionUIExpansionSideTabs", anchorFrame, "BackdropTemplate")
-    panel:SetWidth(238)
-    panel:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", 0, 0)
-    panel:SetPoint("BOTTOMLEFT", anchorFrame, "BOTTOMRIGHT", 0, 0)
-    panel:SetFrameStrata(anchorFrame:GetFrameStrata())
-    panel:SetFrameLevel(anchorFrame:GetFrameLevel() + 1)
+    panel:SetWidth(DEFAULT_PANEL_WIDTH)
     panel:SetBackdrop({
         bgFile = "Interface/Buttons/WHITE8x8",
         edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -996,19 +1105,41 @@ local function ensurePanel(anchorFrame)
     bottomSeam:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -1, 0)
     bottomSeam:SetHeight(1)
 
+    local tabScroll = CreateFrame("ScrollFrame", nil, panel)
+    tabScroll:EnableMouseWheel(true)
+    local tabContent = CreateFrame("Frame", nil, tabScroll)
+    tabContent:SetSize(DEFAULT_PANEL_WIDTH - 16, 1)
+    tabScroll:SetScrollChild(tabContent)
+    tabScroll:SetScript("OnMouseWheel", function(self, delta)
+        local childHeight = (ui.tabContent and ui.tabContent.GetHeight and ui.tabContent:GetHeight()) or 0
+        local visibleHeight = self:GetHeight() or 0
+        local maxScroll = math.max(0, childHeight - visibleHeight)
+        local nextScroll = (self:GetVerticalScroll() or 0) - (delta * 28)
+        if nextScroll < 0 then
+            nextScroll = 0
+        elseif nextScroll > maxScroll then
+            nextScroll = maxScroll
+        end
+        self:SetVerticalScroll(nextScroll)
+    end)
+
     ui.panel = panel
     ui.title = title
     ui.subtitle = subtitle
     ui.joinSeam = joinSeam
     ui.topSeam = topSeam
     ui.bottomSeam = bottomSeam
+    ui.tabScroll = tabScroll
+    ui.tabContent = tabContent
+
+    setPanelAttachment(anchorFrame, shouldAttachLeft(anchorFrame, attachLeft))
 
     return panel
 end
 
 refreshSideTabs = function()
     local anchorFrame, anchorIsArchaeology = getActiveAnchorFrame()
-    local panel = ensurePanel(anchorFrame)
+    local panel = ensurePanel(anchorFrame, anchorIsArchaeology)
     if not panel then
         return
     end
@@ -1025,6 +1156,12 @@ refreshSideTabs = function()
     end
 
     panel:Show()
+
+    if archaeologyMode then
+        setPanelWidth(ARCHAEOLOGY_PANEL_WIDTH)
+    else
+        setPanelWidth(DEFAULT_PANEL_WIDTH)
+    end
 
     if archaeologyMode then
         ui.title:SetText("Archaeology Races")
@@ -1055,12 +1192,51 @@ refreshSideTabs = function()
     end
 
     local switcherHeight = refreshProfessionSwitcher(activeContext)
-    local y = -48 - switcherHeight - 8
+    local listTop = -48 - switcherHeight - 8
+    local listBottom = 10
+
+    if ui.tabScroll then
+        ui.tabScroll:ClearAllPoints()
+        ui.tabScroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, listTop)
+        ui.tabScroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, listBottom)
+        ui.tabScroll:SetVerticalScroll(0)
+    end
+
+    local rowsPerColumn = 10
+    local listWidth = (panel.GetWidth and panel:GetWidth() or DEFAULT_PANEL_WIDTH) - 16
+    local columnGap = 8
+    local columns = 1
+    local rowWidth = listWidth
+    if archaeologyMode and #entries <= (rowsPerColumn * 2) then
+        columns = 2
+        rowWidth = math.floor((listWidth - columnGap) / 2)
+        if rowWidth < 100 then
+            columns = 1
+            rowWidth = listWidth
+        end
+    end
+
     for i, entry in ipairs(entries) do
         local btn = acquireTab(i)
+        if btn:GetParent() ~= ui.tabContent and ui.tabContent then
+            btn:SetParent(ui.tabContent)
+        end
         btn:ClearAllPoints()
-        btn:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, y)
-        btn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, y)
+
+        local col = 0
+        local row = i - 1
+        if columns > 1 then
+            col = math.floor((i - 1) / rowsPerColumn)
+            if col > 1 then
+                col = 1
+            end
+            row = (i - 1) % rowsPerColumn
+        end
+        local x = col * (rowWidth + columnGap)
+        local rowY = -row * TAB_ROW_HEIGHT
+
+        btn:SetPoint("TOPLEFT", ui.tabContent or panel, "TOPLEFT", x, rowY)
+        btn:SetWidth(rowWidth)
 
         local label = entry.expansionName
         local rankLabel = ""
@@ -1078,6 +1254,7 @@ refreshSideTabs = function()
         btn.baseProfessionID = activeProfessionID
         btn.isPinned = archaeologyMode and false or isPinned
         btn.isArchaeologyRace = archaeologyMode and entry.isArchaeologyRace == true
+        btn.raceIndex = archaeologyMode and entry.raceIndex or nil
         btn.canSolve = archaeologyMode and entry.canSolve == true
         btn.isEvenRow = (i % 2 == 0)
 
@@ -1135,7 +1312,15 @@ refreshSideTabs = function()
             btn.pinBtn.border:SetColorTexture(0.48, 0.34, 0.20, 0.55)
         end
 
-        y = y - 30
+    end
+
+    if ui.tabContent then
+        local usedRows = #entries
+        if columns > 1 then
+            usedRows = math.min(rowsPerColumn, math.ceil(#entries / 2))
+        end
+        local contentHeight = math.max(1, (usedRows * TAB_ROW_HEIGHT) + 2)
+        ui.tabContent:SetHeight(contentHeight)
     end
 
     for i = #entries + 1, #ui.tabs do
@@ -1150,15 +1335,37 @@ eventFrame:RegisterEvent("TRADE_SKILL_LIST_UPDATE")
 eventFrame:RegisterEvent("SKILL_LINES_CHANGED")
 eventFrame:RegisterEvent("ADDON_LOADED")
 
-eventFrame:SetScript("OnEvent", function(_, event, arg1)
-    if event == "ADDON_LOADED" and arg1 == "Blizzard_ArchaeologyUI" then
-        if _G.ArchaeologyFrame and not ui.archaeologyHooksInstalled then
-            _G.ArchaeologyFrame:HookScript("OnShow", refreshSideTabs)
-            _G.ArchaeologyFrame:HookScript("OnHide", refreshSideTabs)
-            ui.archaeologyHooksInstalled = true
-        end
-        C_Timer.After(0, refreshSideTabs)
+local function ensureArchaeologyHooksInstalled()
+    if _G.ArchaeologyFrame and not ui.archaeologyHooksInstalled then
+        _G.ArchaeologyFrame:HookScript("OnShow", refreshSideTabs)
+        _G.ArchaeologyFrame:HookScript("OnHide", refreshSideTabs)
+        ui.archaeologyHooksInstalled = true
+    end
+end
+
+local function ensureArchaeologyHooksWithRetry(attempt)
+    attempt = attempt or 1
+    ensureArchaeologyHooksInstalled()
+    if ui.archaeologyHooksInstalled then
         return
+    end
+
+    if attempt >= 20 or not (C_Timer and C_Timer.After) then
+        return
+    end
+
+    C_Timer.After(0.2, function()
+        ensureArchaeologyHooksWithRetry(attempt + 1)
+    end)
+end
+
+eventFrame:SetScript("OnEvent", function(_, event, arg1)
+    if event == "ADDON_LOADED" then
+        ensureArchaeologyHooksInstalled()
+        if arg1 == "Blizzard_ArchaeologyUI" then
+            C_Timer.After(0, refreshSideTabs)
+            return
+        end
     end
 
     if event == "ADDON_LOADED" and arg1 == "Blizzard_Professions" then
@@ -1177,11 +1384,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
             _G.ProfessionsFrame:HookScript("OnHide", refreshSideTabs)
             ui.hooksInstalled = true
         end
-        if _G.ArchaeologyFrame and not ui.archaeologyHooksInstalled then
-            _G.ArchaeologyFrame:HookScript("OnShow", refreshSideTabs)
-            _G.ArchaeologyFrame:HookScript("OnHide", refreshSideTabs)
-            ui.archaeologyHooksInstalled = true
-        end
+        ensureArchaeologyHooksWithRetry(1)
         C_Timer.After(0, refreshSideTabs)
         return
     end

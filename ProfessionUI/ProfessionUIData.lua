@@ -576,6 +576,29 @@ function addon.IsArchaeologyProfession(prof)
 end
 
 function addon.LoadArchaeologyData()
+    local totalArtifactsByRaceName = {
+        ["Arakkoa"] = 12,
+        ["Demonic"] = 6,
+        ["Draenei"] = 10,
+        ["Draenor Clans"] = 21,
+        ["Drust"] = 9,
+        ["Dwarf"] = 31,
+        ["Fossil"] = 17,
+        ["Highborne"] = 6,
+        ["Highmountain Tauren"] = 6,
+        ["Mantid"] = 10,
+        ["Mogu"] = 12,
+        ["Nerubian"] = 9,
+        ["Night Elf"] = 25,
+        ["Ogre"] = 12,
+        ["Orc"] = 10,
+        ["Pandaren"] = 12,
+        ["Tol'vir"] = 13,
+        ["Troll"] = 17,
+        ["Vrykul"] = 7,
+        ["Zandalari"] = 9,
+    }
+
     local races = {}
     local numRaces = 0
 
@@ -604,6 +627,15 @@ function addon.LoadArchaeologyData()
 
         if raceName and raceName ~= "" then
             local artifactName, artifactTex, numFragRequired, numFragUsed, numSockets
+            local numArtifactsByRace
+
+            if type(numCompleted) == "number" and numCompleted > 10000 and type(raceItemID) == "number" and raceItemID >= 0 and raceItemID <= 10000 then
+                numCompleted, raceItemID = raceItemID, numCompleted
+            end
+
+            if type(numCompleted) ~= "number" or numCompleted < 0 or numCompleted > 10000 then
+                numCompleted = 0
+            end
 
             if GetActiveArtifactByRace then
                 -- Returns: name, description, uniqueness, rarity, icon, fragsRequired, fragsUsed, sockets
@@ -617,20 +649,39 @@ function addon.LoadArchaeologyData()
                 end
             end
 
+            if GetNumArtifactsByRace then
+                local ok, count = pcall(GetNumArtifactsByRace, i)
+                if ok and type(count) == "number" and count >= 0 then
+                    numArtifactsByRace = count
+                end
+            end
+
             numFragRequired = numFragRequired or 0
             numFragUsed = numFragUsed or 0
+
+            local completedArtifacts = 0
+            if type(numArtifactsByRace) == "number" and numArtifactsByRace > 0 then
+                completedArtifacts = numArtifactsByRace
+            end
+
+            local totalArtifacts = totalArtifactsByRaceName[raceName]
+            if type(totalArtifacts) ~= "number" or totalArtifacts < 0 then
+                totalArtifacts = nil
+            end
 
             table.insert(races, {
                 raceIndex = i,
                 raceName = raceName,
                 raceTexture = raceTexture,
-                numCompleted = numCompleted or 0,
+                numCompleted = numCompleted,
                 raceItemID = raceItemID,
                 artifactName = artifactName or "",
                 artifactTex = artifactTex,
                 numFragRequired = numFragRequired,
                 numFragUsed = numFragUsed,
                 numSockets = numSockets or 0,
+                completedArtifacts = completedArtifacts,
+                totalArtifacts = totalArtifacts,
                 canSolve = numFragRequired > 0 and numFragUsed >= numFragRequired,
             })
         end
