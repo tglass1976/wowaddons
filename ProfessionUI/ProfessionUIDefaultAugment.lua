@@ -36,9 +36,17 @@ local DEFAULT_PROFESSION_ICON = 134400
 local DEFAULT_PANEL_WIDTH = 238
 local ARCHAEOLOGY_PANEL_WIDTH = 468
 local TAB_ROW_HEIGHT = 30
+local PROF_SWITCHER_BUTTON_SIZE = 40
+local PROF_SWITCHER_ICON_SIZE = 34
+local PROF_SWITCHER_BUTTON_STRIDE = 44
+local ATT_TAB_SAFE_GUTTER = 56
 
 local function getExpansionSort(expansionName)
     return expansionOrderIndex[expansionName] or 999
+end
+
+local function isSupportedExpansionName(expansionName)
+    return type(expansionName) == "string" and expansionOrderIndex[expansionName] ~= nil
 end
 
 local function escapeLuaPattern(text)
@@ -233,13 +241,14 @@ local function buildFallbackEntries(activeContext)
 
     local entries = {}
     for expansionName, data in pairs(expansionData) do
-        if type(data) == "table" and type(data.skillLineID) == "number" then
+        if isSupportedExpansionName(expansionName) and type(data) == "table" and type(data.skillLineID) == "number" then
             entries[#entries + 1] = {
                 skillLineID = data.skillLineID,
                 expansionName = expansionName,
                 rank = tonumber(data.rank) or 0,
                 maxRank = tonumber(data.maxRank) or 0,
                 isChildSkillLine = true,
+                isFallback = true,
             }
         end
     end
@@ -331,46 +340,66 @@ end
 
 local function getExpansionEntriesForCurrentProfession()
     local entries = {}
-
-    if not (C_TradeSkillUI and C_TradeSkillUI.GetAllProfessionTradeSkillLines and C_TradeSkillUI.GetProfessionInfoBySkillLineID) then
-        return entries
-    end
-
     local activeContext = getActiveProfessionContext()
     if not activeContext.professionID and not activeContext.professionName then
         return entries
     end
 
-    local lines = C_TradeSkillUI.GetAllProfessionTradeSkillLines()
-    if type(lines) ~= "table" then
-        return entries
-    end
-
     local byExpansion = {}
 
-    for _, skillLineID in ipairs(lines) do
-        if type(skillLineID) == "number" then
-            local info = C_TradeSkillUI.GetProfessionInfoBySkillLineID(skillLineID)
-            if type(info) == "table" then
-                if lineBelongsToActiveProfession(info, activeContext) then
-                    local expansionName = resolveExpansionName(info)
-                    if expansionName then
-                        local rank = tonumber(info.skillLevel) or 0
-                        local maxRank = tonumber(info.maxSkillLevel) or 0
+    if C_TradeSkillUI and C_TradeSkillUI.GetAllProfessionTradeSkillLines and C_TradeSkillUI.GetProfessionInfoBySkillLineID then
+        local lines = C_TradeSkillUI.GetAllProfessionTradeSkillLines()
+        if type(lines) == "table" then
+            for _, skillLineID in ipairs(lines) do
+                if type(skillLineID) == "number" then
+                    local info = C_TradeSkillUI.GetProfessionInfoBySkillLineID(skillLineID)
+                    if type(info) == "table" and lineBelongsToActiveProfession(info, activeContext) then
+                        local expansionName = resolveExpansionName(info)
+                        if expansionName and isSupportedExpansionName(expansionName) then
+                            local rank = tonumber(info.skillLevel) or 0
+                            local maxRank = tonumber(info.maxSkillLevel) or 0
 
-                        local prev = byExpansion[expansionName]
-                        if not prev or rank > (prev.rank or 0) then
-                            byExpansion[expansionName] = {
-                                skillLineID = skillLineID,
-                                expansionName = expansionName,
-                                rank = rank,
-                                maxRank = maxRank,
-                                isChildSkillLine = info.parentProfessionID ~= nil,
-                            }
+                            local prev = byExpansion[expansionName]
+                            if not prev or rank > (prev.rank or 0) then
+                                byExpansion[expansionName] = {
+                                    skillLineID = skillLineID,
+                                    expansionName = expansionName,
+                                    rank = rank,
+                                    maxRank = maxRank,
+                                    isChildSkillLine = info.parentProfessionID ~= nil,
+                                }
+                            end
                         end
                     end
                 end
             end
+        end
+    end
+
+    -- Merge fallback entries so unlearned expansions still appear in the side list.
+    local fallbackEntries = buildFallbackEntries(activeContext)
+    for _, fallback in ipairs(fallbackEntries) do
+        local existing = byExpansion[fallback.expansionName]
+        if not existing then
+            byExpansion[fallback.expansionName] = fallback
+        elseif (type(existing.skillLineID) ~= "number") and type(fallback.skillLineID) == "number" then
+            existing.skillLineID = fallback.skillLineID
+            existing.isChildSkillLine = fallback.isChildSkillLine
+            existing.isFallback = true
+        end
+    end
+
+    -- Ensure a consistent, full expansion roster for every profession.
+    for _, expansionName in ipairs(EXPANSION_ORDER) do
+        if not byExpansion[expansionName] then
+            byExpansion[expansionName] = {
+                skillLineID = nil,
+                expansionName = expansionName,
+                rank = 0,
+                maxRank = 0,
+                isChildSkillLine = true,
+                isPlaceholder = true,
+            }
         end
     end
 
@@ -386,10 +415,6 @@ local function getExpansionEntriesForCurrentProfession()
         end
         return a.expansionName < b.expansionName
     end)
-
-    if #entries == 0 then
-        return buildFallbackEntries(activeContext)
-    end
 
     return entries
 end
@@ -681,9 +706,17 @@ local function getProfessionSwitchEntries()
     addEntry(fishing, "Secondary")
     addEntry(archaeology, "Archaeology")
 
+    local sectionSort = {
+        Primary = 1,
+        Secondary = 2,
+        Archaeology = 3,
+    }
+
     table.sort(entries, function(a, b)
-        if (a.section or "") ~= (b.section or "") then
-            return a.section == "Primary"
+        local aSort = sectionSort[a.section] or 99
+        local bSort = sectionSort[b.section] or 99
+        if aSort ~= bSort then
+            return aSort < bSort
         end
         return (a.label or "") < (b.label or "")
     end)
@@ -699,7 +732,7 @@ local function acquireProfessionButton(index)
     end
 
     btn = CreateFrame("Button", nil, ui.panel, "BackdropTemplate")
-    btn:SetSize(32, 32)
+    btn:SetSize(PROF_SWITCHER_BUTTON_SIZE, PROF_SWITCHER_BUTTON_SIZE)
     btn:SetBackdrop({
         bgFile = "Interface/Buttons/WHITE8x8",
         edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -711,9 +744,17 @@ local function acquireProfessionButton(index)
     btn:SetBackdropColor(0.16, 0.10, 0.10, 0.90)
     btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
-    btn.icon:SetSize(26, 26)
+    btn.icon:SetSize(PROF_SWITCHER_ICON_SIZE, PROF_SWITCHER_ICON_SIZE)
     btn.icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
     btn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    btn.activeGlow = btn:CreateTexture(nil, "OVERLAY")
+    btn.activeGlow:SetTexture("Interface\\Buttons\\CheckButtonHilight")
+    btn.activeGlow:SetBlendMode("ADD")
+    btn.activeGlow:SetPoint("TOPLEFT", btn, "TOPLEFT", -3, 3)
+    btn.activeGlow:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 3, -3)
+    btn.activeGlow:SetVertexColor(1.0, 0.92, 0.55, 0.8)
+    btn.activeGlow:SetAlpha(0.38)
+    btn.activeGlow:Hide()
     btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     btn.text:SetPoint("CENTER", btn, "CENTER", 0, 0)
     btn.text:SetJustifyH("CENTER")
@@ -729,8 +770,21 @@ local function acquireProfessionButton(index)
         C_Timer.After(0, refreshSideTabs)
     end)
 
-    btn:SetScript("OnEnter", nil)
-    btn:SetScript("OnLeave", nil)
+    btn:SetScript("OnEnter", function(self)
+        if not self.fullLabel or self.fullLabel == "" then
+            return
+        end
+
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.fullLabel, 1, 0.93, 0.45)
+        if self.sectionLabel and self.sectionLabel ~= "" then
+            GameTooltip:AddLine(self.sectionLabel, 0.80, 0.80, 0.80)
+        end
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
 
     ui.professionButtons[index] = btn
     return btn
@@ -752,90 +806,67 @@ end
 
 local function refreshProfessionSwitcher(activeContext)
     local entries = getProfessionSwitchEntries()
-    local columns = 6
-    local x = 8
+    local rightPadding = 8
     local y = -48
 
-    local primary = {}
-    local secondary = {}
-    local archaeology = {}
-    for _, entry in ipairs(entries) do
-        if entry.section == "Archaeology" then
-            archaeology[#archaeology + 1] = entry
-        elseif entry.section == "Secondary" then
-            secondary[#secondary + 1] = entry
-        else
-            primary[#primary + 1] = entry
-        end
-    end
-
     local buttonIndex = 0
-    local headerIndex = 0
-    local cursor = 0
-    local rowHeight = 34
-    local headerHeight = 12
-    local sectionGap = 4
+    local cursor = 4
+    local rowHeight = PROF_SWITCHER_BUTTON_STRIDE
+    local panelWidth = (ui.panel and ui.panel.GetWidth and ui.panel:GetWidth()) or DEFAULT_PANEL_WIDTH
+    local iconAreaWidth = math.max(0, panelWidth - ATT_TAB_SAFE_GUTTER - rightPadding)
+    local columns = math.max(1, math.floor((iconAreaWidth + (PROF_SWITCHER_BUTTON_STRIDE - PROF_SWITCHER_BUTTON_SIZE)) / PROF_SWITCHER_BUTTON_STRIDE))
 
-    local function renderSection(sectionName, sectionEntries)
-        if #sectionEntries == 0 then
-            return
-        end
+    for i = 1, #entries do
+        local entry = entries[i]
+        buttonIndex = buttonIndex + 1
+        local btn = acquireProfessionButton(buttonIndex)
+        local col = (i - 1) % columns
+        local row = math.floor((i - 1) / columns)
+        local rowStartIndex = row * columns + 1
+        local rowEndIndex = math.min(#entries, rowStartIndex + columns - 1)
+        local rowItemCount = rowEndIndex - rowStartIndex + 1
+        local rowWidth = ((rowItemCount - 1) * PROF_SWITCHER_BUTTON_STRIDE) + PROF_SWITCHER_BUTTON_SIZE
+        local rowStartX = panelWidth - rightPadding - rowWidth
 
-        headerIndex = headerIndex + 1
-        local header = acquireProfessionSectionHeader(headerIndex)
-        header:ClearAllPoints()
-        header:SetPoint("TOPLEFT", ui.panel, "TOPLEFT", x, y - cursor)
-        header:SetText(sectionName)
-        cursor = cursor + headerHeight
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", ui.panel, "TOPLEFT", rowStartX + (col * PROF_SWITCHER_BUTTON_STRIDE), y - cursor - (row * rowHeight))
 
-        for i = 1, #sectionEntries do
-            local entry = sectionEntries[i]
-            buttonIndex = buttonIndex + 1
-            local btn = acquireProfessionButton(buttonIndex)
-            local col = (i - 1) % columns
-            local row = math.floor((i - 1) / columns)
-            btn:ClearAllPoints()
-            btn:SetPoint("TOPLEFT", ui.panel, "TOPLEFT", x + (col * 36), y - cursor - (row * rowHeight))
-            btn:SetPoint("TOPRIGHT", ui.panel, "TOPLEFT", x + (col * 36) + 32, y - cursor - (row * rowHeight))
+        btn.text:SetText("")
+        btn.fullLabel = entry.label
+        btn.sectionLabel = entry.section
+        btn.skillLineID = entry.skillLineID
+        btn.icon:SetTexture(entry.icon or DEFAULT_PROFESSION_ICON)
 
-            btn.text:SetText("")
-            btn.fullLabel = entry.label
-            btn.skillLineID = entry.skillLineID
-            btn.icon:SetTexture(entry.icon or DEFAULT_PROFESSION_ICON)
-
-            local isActive = false
-            if type(activeContext) == "table" then
-                if type(activeContext.professionID) == "number" and activeContext.professionID == entry.professionID then
-                    isActive = true
-                elseif type(activeContext.professionName) == "string" and string.lower(activeContext.professionName) == string.lower(entry.label or "") then
-                    isActive = true
-                end
-            end
-
-            if isActive then
-                btn:SetBackdropColor(0.29, 0.18, 0.14, 0.96)
-                btn:SetBackdropBorderColor(0.78, 0.58, 0.18, 0.95)
-                btn.text:SetTextColor(1, 0.92, 0.35)
-            else
-                btn:SetBackdropColor(0.16, 0.10, 0.10, 0.90)
-                btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
-                btn.text:SetTextColor(0.95, 0.95, 0.95)
+        local isActive = false
+        if type(activeContext) == "table" then
+            if type(activeContext.professionID) == "number" and activeContext.professionID == entry.professionID then
+                isActive = true
+            elseif type(activeContext.professionName) == "string" and string.lower(activeContext.professionName) == string.lower(entry.label or "") then
+                isActive = true
             end
         end
 
-        local sectionRows = math.ceil(#sectionEntries / columns)
-        cursor = cursor + (sectionRows * rowHeight) + sectionGap
+        if isActive then
+            btn:SetBackdropColor(0.29, 0.18, 0.14, 0.96)
+            btn:SetBackdropBorderColor(0.78, 0.58, 0.18, 0.95)
+            btn.activeGlow:Show()
+            btn.text:SetTextColor(1, 0.92, 0.35)
+        else
+            btn:SetBackdropColor(0.16, 0.10, 0.10, 0.90)
+            btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
+            btn.activeGlow:Hide()
+            btn.text:SetTextColor(0.95, 0.95, 0.95)
+        end
     end
 
-    renderSection("Primary", primary)
-    renderSection("Secondary", secondary)
-    renderSection("Archaeology", archaeology)
+    local totalRows = math.max(1, math.ceil(#entries / columns))
+    cursor = cursor + (totalRows * rowHeight) + 8
 
     for i = buttonIndex + 1, #ui.professionButtons do
         ui.professionButtons[i]:Hide()
     end
 
-    for i = headerIndex + 1, #ui.professionSectionHeaders do
+    for i = 1, #ui.professionSectionHeaders do
         ui.professionSectionHeaders[i]:Hide()
     end
 
@@ -918,6 +949,10 @@ local function acquireTab(index)
                 openArchaeologyCompletedForRace(self.raceIndex)
                 C_Timer.After(0.05, refreshSideTabs)
             end
+            return
+        end
+
+        if self.isUnavailableExpansion then
             return
         end
 
@@ -1177,7 +1212,8 @@ refreshSideTabs = function()
     if not archaeologyMode and desiredExpansion then
         for _, entry in ipairs(entries) do
             if entry.expansionName == desiredExpansion then
-                if currentChildSkillLineID ~= entry.skillLineID then
+                local canSwitchToEntry = (entry.isPlaceholder ~= true and entry.isFallback ~= true and type(entry.skillLineID) == "number")
+                if canSwitchToEntry and currentChildSkillLineID ~= entry.skillLineID then
                     switchProfessionSkillLine(entry.skillLineID, entry.isChildSkillLine == true)
                     ui.pinAppliedForProfessionID = activeProfessionID
                     C_Timer.After(0, refreshSideTabs)
@@ -1250,6 +1286,7 @@ refreshSideTabs = function()
         btn.rankText:SetText(rankLabel)
         btn.skillLineID = archaeologyMode and nil or entry.skillLineID
         btn.isChildSkillLine = archaeologyMode and false or (entry.isChildSkillLine == true)
+        btn.isUnavailableExpansion = (not archaeologyMode) and (entry.isPlaceholder == true or entry.isFallback == true)
         btn.expansionName = entry.expansionName
         btn.baseProfessionID = activeProfessionID
         btn.isPinned = archaeologyMode and false or isPinned
@@ -1259,6 +1296,11 @@ refreshSideTabs = function()
         btn.isEvenRow = (i % 2 == 0)
 
         if archaeologyMode then
+            btn.pinBtn:Hide()
+            btn.pinBtn:Disable()
+            btn.label:SetPoint("LEFT", btn, "LEFT", 12, 0)
+            btn.label:SetPoint("RIGHT", btn, "RIGHT", -62, 0)
+        elseif btn.isUnavailableExpansion then
             btn.pinBtn:Hide()
             btn.pinBtn:Disable()
             btn.label:SetPoint("LEFT", btn, "LEFT", 12, 0)
@@ -1287,6 +1329,16 @@ refreshSideTabs = function()
             btn:SetBackdropBorderColor(0.78, 0.58, 0.18, 0.95)
             btn.leftAccent:Show()
             btn.leftAccent:SetColorTexture(0.88, 0.72, 0.24, 0.95)
+        elseif btn.isUnavailableExpansion then
+            btn.label:SetTextColor(0.66, 0.66, 0.66)
+            btn.rankText:SetTextColor(0.56, 0.56, 0.56)
+            if btn.isEvenRow then
+                btn:SetBackdropColor(0.15, 0.10, 0.10, 0.82)
+            else
+                btn:SetBackdropColor(0.13, 0.09, 0.09, 0.82)
+            end
+            btn:SetBackdropBorderColor(0.34, 0.20, 0.20, 0.90)
+            btn.leftAccent:Hide()
         else
             btn.label:SetTextColor(0.95, 0.95, 0.95)
             btn.rankText:SetTextColor(0.86, 0.86, 0.86)
@@ -1302,6 +1354,10 @@ refreshSideTabs = function()
             btn.pinBtn.icon:SetVertexColor(0.88, 0.88, 0.88, 0.95)
             btn.pinBtn.bg:SetColorTexture(0.12, 0.08, 0.08, 0.95)
             btn.pinBtn.border:SetColorTexture(0.48, 0.34, 0.20, 0.55)
+        elseif btn.isUnavailableExpansion then
+            btn.pinBtn.icon:SetVertexColor(0.68, 0.68, 0.68, 0.85)
+            btn.pinBtn.bg:SetColorTexture(0.10, 0.07, 0.07, 0.90)
+            btn.pinBtn.border:SetColorTexture(0.36, 0.26, 0.16, 0.40)
         elseif isPinned then
             btn.pinBtn.icon:SetVertexColor(1, 0.92, 0.35, 1)
             btn.pinBtn.bg:SetColorTexture(0.18, 0.14, 0.08, 0.98)
