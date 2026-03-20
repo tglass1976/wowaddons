@@ -1,9 +1,0 @@
-## Interface: 120001, 40402, 30403, 11508
-## Title: Bank Mats Viewer
-## Notes: View crafting materials from your Warband Bank in a grouped inventory grid.
-## Author: tglass1976
-## Version: 0.1.0
-## SavedVariables: BankMatsViewerDB
-
-BankMatsViewerCatalog.lua
-BankMatsViewer.lua
