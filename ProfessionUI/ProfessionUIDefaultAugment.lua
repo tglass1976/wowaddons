@@ -14,6 +14,7 @@ local ui = {
     panel = nil,
     title = nil,
     subtitle = nil,
+    archaeologyNotice = nil,
     professionButtons = {},
     professionSectionHeaders = {},
     joinSeam = nil,
@@ -24,13 +25,15 @@ local ui = {
     tabContent = nil,
     hooksInstalled = false,
     archaeologyHooksInstalled = false,
-    pinAppliedForProfessionID = nil,
+    hideUntilNextTradeSkillOpen = false,
+    pinAutoSwitchRetryKey = nil,
+    pinAutoSwitchRetryCount = 0,
 }
 
 local refreshSideTabs
 
-local PIN_ICON_LOCKED = "Interface\\Buttons\\LockButton-Locked-Up"
-local PIN_ICON_UNLOCKED = "Interface\\Buttons\\LockButton-Unlocked-Up"
+local PIN_ICON_LOCKED = "Interface\\Buttons\\UI-CheckBox-Check"
+local PIN_ICON_UNLOCKED = "Interface\\Buttons\\UI-CheckBox-Up"
 local ARCHAEOLOGY_SKILL_LINE_ID = 794
 local DEFAULT_PROFESSION_ICON = 134400
 local DEFAULT_PANEL_WIDTH = 238
@@ -41,12 +44,48 @@ local PROF_SWITCHER_ICON_SIZE = 34
 local PROF_SWITCHER_BUTTON_STRIDE = 44
 local ATT_TAB_SAFE_GUTTER = 56
 
+local THEME = {
+    panelBg = { 0.08, 0.08, 0.08, 0.97 },
+    panelBorder = { 0.42, 0.42, 0.42, 0.95 },
+    headerBg = { 0.13, 0.13, 0.13, 0.96 },
+    seamStrong = { 0.44, 0.44, 0.44, 0.72 },
+    seamSoft = { 0.44, 0.44, 0.44, 0.42 },
+    switcherBg = { 0.11, 0.11, 0.11, 0.93 },
+    switcherBorder = { 0.38, 0.38, 0.38, 0.95 },
+    switcherActiveBg = { 0.17, 0.15, 0.12, 0.97 },
+    switcherActiveBorder = { 0.76, 0.62, 0.26, 0.95 },
+    activeGlow = { 1.00, 0.88, 0.45, 0.80 },
+    rowOddBg = { 0.11, 0.11, 0.11, 0.90 },
+    rowEvenBg = { 0.13, 0.13, 0.13, 0.90 },
+    rowHoverBg = { 0.18, 0.17, 0.15, 0.95 },
+    rowBorder = { 0.36, 0.36, 0.36, 0.95 },
+    rowSelectedBg = { 0.22, 0.19, 0.14, 0.97 },
+    rowSelectedBorder = { 0.76, 0.62, 0.26, 0.95 },
+    rowSelectedAccent = { 0.93, 0.76, 0.28, 0.95 },
+    rowSelectedText = { 1.00, 0.93, 0.56 },
+    rowText = { 0.94, 0.94, 0.94 },
+    rowSubText = { 0.84, 0.84, 0.84 },
+    pinBg = { 0.10, 0.10, 0.10, 0.96 },
+    pinBorder = { 0.42, 0.42, 0.42, 0.60 },
+    pinPinnedBg = { 0.19, 0.16, 0.11, 0.98 },
+    pinPinnedBorder = { 0.82, 0.66, 0.25, 0.82 },
+    pinIcon = { 0.90, 0.90, 0.90, 0.98 },
+    pinPinnedIcon = { 1.00, 0.94, 0.62, 1.00 },
+}
+
 local function getExpansionSort(expansionName)
     return expansionOrderIndex[expansionName] or 999
 end
 
 local function isSupportedExpansionName(expansionName)
     return type(expansionName) == "string" and expansionOrderIndex[expansionName] ~= nil
+end
+
+local function getDisplayExpansionName(expansionName)
+    if addon.GetExpansionDisplayName then
+        return addon.GetExpansionDisplayName(expansionName)
+    end
+    return expansionName
 end
 
 local function escapeLuaPattern(text)
@@ -106,15 +145,17 @@ local function getActiveProfessionContext()
     if C_TradeSkillUI and C_TradeSkillUI.GetBaseProfessionInfo then
         local baseInfo = C_TradeSkillUI.GetBaseProfessionInfo()
         if type(baseInfo) == "table" then
-            if type(baseInfo.professionID) == "number" then
-                context.professionID = baseInfo.professionID
-            elseif type(baseInfo.parentProfessionID) == "number" then
+            if type(baseInfo.parentProfessionID) == "number" then
                 context.professionID = baseInfo.parentProfessionID
+            elseif type(baseInfo.professionID) == "number" then
+                context.professionID = baseInfo.professionID
             end
             if type(baseInfo.skillLineID) == "number" then
                 context.currentSkillLineID = baseInfo.skillLineID
             end
-            if type(baseInfo.professionName) == "string" and baseInfo.professionName ~= "" then
+            if type(baseInfo.parentProfessionName) == "string" and baseInfo.parentProfessionName ~= "" then
+                context.professionName = baseInfo.parentProfessionName
+            elseif type(baseInfo.professionName) == "string" and baseInfo.professionName ~= "" then
                 context.professionName = baseInfo.professionName
             end
         end
@@ -173,13 +214,19 @@ local function getActiveProfessionContext()
         end
     end
 
-    if not context.professionID and context.currentSkillLineID and C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID then
+    if context.currentSkillLineID and C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID then
         local activeInfo = C_TradeSkillUI.GetProfessionInfoBySkillLineID(context.currentSkillLineID)
         if type(activeInfo) == "table" then
             if type(activeInfo.parentProfessionID) == "number" then
                 context.professionID = activeInfo.parentProfessionID
             elseif type(activeInfo.professionID) == "number" then
                 context.professionID = activeInfo.professionID
+            end
+
+            if type(activeInfo.parentProfessionName) == "string" and activeInfo.parentProfessionName ~= "" then
+                context.professionName = activeInfo.parentProfessionName
+            elseif type(activeInfo.professionName) == "string" and activeInfo.professionName ~= "" then
+                context.professionName = activeInfo.professionName
             end
         end
     end
@@ -217,6 +264,9 @@ local function lineBelongsToActiveProfession(info, activeContext)
                 if string.find(lowerCandidate, lowerActiveName, 1, true) then
                     return true
                 end
+                if string.find(lowerActiveName, lowerCandidate, 1, true) then
+                    return true
+                end
             end
         end
     end
@@ -249,6 +299,7 @@ local function buildFallbackEntries(activeContext)
                 maxRank = tonumber(data.maxRank) or 0,
                 isChildSkillLine = true,
                 isFallback = true,
+                professionID = activeContext.professionID,
             }
         end
     end
@@ -272,7 +323,30 @@ local function getPinStorage()
     end
     db.ui = db.ui or {}
     db.ui.pinnedExpansionByProfessionID = db.ui.pinnedExpansionByProfessionID or {}
-    return db.ui.pinnedExpansionByProfessionID
+    return db.ui
+end
+
+local function getLegacyPinnedExpansion(uiStorage)
+    local legacy = uiStorage and uiStorage.pinnedExpansionByProfessionID or nil
+    if type(legacy) ~= "table" then
+        return nil
+    end
+
+    for _, expansionName in ipairs(EXPANSION_ORDER) do
+        for _, pinned in pairs(legacy) do
+            if pinned == expansionName then
+                return expansionName
+            end
+        end
+    end
+
+    for _, pinned in pairs(legacy) do
+        if isSupportedExpansionName(pinned) then
+            return pinned
+        end
+    end
+
+    return nil
 end
 
 local function getSelectedExpansionStorage()
@@ -300,28 +374,48 @@ local function setLastSelectedExpansion(expansionName)
     uiStorage.lastSelectedExpansion = expansionName
 end
 
-local function getPinnedExpansion(professionID)
+local function getPinnedExpansion()
     local storage = getPinStorage()
-    if not storage or not professionID then
+    if not storage then
         return nil
     end
-    return storage[tostring(professionID)]
+
+    if isSupportedExpansionName(storage.globalPinnedExpansion) then
+        return storage.globalPinnedExpansion
+    end
+
+    local migrated = getLegacyPinnedExpansion(storage)
+    if migrated then
+        storage.globalPinnedExpansion = migrated
+        return migrated
+    end
+
+    return nil
 end
 
-local function setPinnedExpansion(professionID, expansionName)
+local function setPinnedExpansion(expansionName)
     local storage = getPinStorage()
-    if not storage or not professionID then
+    if not storage or not isSupportedExpansionName(expansionName) then
         return
     end
-    storage[tostring(professionID)] = expansionName
+
+    storage.globalPinnedExpansion = expansionName
+
+    local legacy = storage.pinnedExpansionByProfessionID
+    if type(legacy) == "table" then
+        for key in pairs(legacy) do
+            legacy[key] = nil
+        end
+    end
 end
 
-local function clearPinnedExpansion(professionID)
+local function clearPinnedExpansion()
     local storage = getPinStorage()
-    if not storage or not professionID then
+    if not storage then
         return
     end
-    storage[tostring(professionID)] = nil
+
+    storage.globalPinnedExpansion = nil
 end
 
 local function clearAllPinnedExpansions()
@@ -331,10 +425,20 @@ local function clearAllPinnedExpansions()
     end
 
     local removed = 0
-    for key in pairs(storage) do
-        storage[key] = nil
+
+    if storage.globalPinnedExpansion ~= nil then
+        storage.globalPinnedExpansion = nil
         removed = removed + 1
     end
+
+    local legacy = storage.pinnedExpansionByProfessionID
+    if type(legacy) == "table" then
+        for key in pairs(legacy) do
+            legacy[key] = nil
+            removed = removed + 1
+        end
+    end
+
     return removed
 end
 
@@ -367,6 +471,7 @@ local function getExpansionEntriesForCurrentProfession()
                                     rank = rank,
                                     maxRank = maxRank,
                                     isChildSkillLine = info.parentProfessionID ~= nil,
+                                    professionID = info.parentProfessionID or info.professionID or activeContext.professionID,
                                 }
                             end
                         end
@@ -386,6 +491,9 @@ local function getExpansionEntriesForCurrentProfession()
             existing.skillLineID = fallback.skillLineID
             existing.isChildSkillLine = fallback.isChildSkillLine
             existing.isFallback = true
+            if type(existing.professionID) ~= "number" then
+                existing.professionID = fallback.professionID
+            end
         end
     end
 
@@ -399,6 +507,7 @@ local function getExpansionEntriesForCurrentProfession()
                 maxRank = 0,
                 isChildSkillLine = true,
                 isPlaceholder = true,
+                professionID = activeContext.professionID,
             }
         end
     end
@@ -417,6 +526,63 @@ local function getExpansionEntriesForCurrentProfession()
     end)
 
     return entries
+end
+
+local function resolveSkillLineForExpansion(expansionName, preferredProfessionID)
+    if type(expansionName) ~= "string" or expansionName == "" then
+        return nil, nil
+    end
+
+    local activeContext = getActiveProfessionContext()
+    if not activeContext.professionID and not activeContext.professionName then
+        return nil, nil
+    end
+
+    if C_TradeSkillUI and C_TradeSkillUI.GetAllProfessionTradeSkillLines and C_TradeSkillUI.GetProfessionInfoBySkillLineID then
+        local lines = C_TradeSkillUI.GetAllProfessionTradeSkillLines()
+        if type(lines) == "table" then
+            for _, lineSkillLineID in ipairs(lines) do
+                if type(lineSkillLineID) == "number" then
+                    local info = C_TradeSkillUI.GetProfessionInfoBySkillLineID(lineSkillLineID)
+                    if type(info) == "table" then
+                        local belongsToPreferred = false
+                        if type(preferredProfessionID) == "number" then
+                            local lineProfessionID = info.parentProfessionID or info.professionID
+                            belongsToPreferred = (type(lineProfessionID) == "number" and lineProfessionID == preferredProfessionID)
+                        end
+                        if (belongsToPreferred or lineBelongsToActiveProfession(info, activeContext)) then
+                        local resolvedExpansion = resolveExpansionName(info)
+                        if resolvedExpansion == expansionName then
+                            return lineSkillLineID, info.parentProfessionID ~= nil
+                        end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if type(addon.BuildExpansionDataForProfession) == "function" then
+        local prof = {
+            name = activeContext.professionName,
+            skillLine = activeContext.professionID or activeContext.currentSkillLineID,
+        }
+        local expansionData = addon.BuildExpansionDataForProfession(prof)
+        local info = type(expansionData) == "table" and expansionData[expansionName] or nil
+        if type(info) == "table" and type(info.skillLineID) == "number" then
+            return info.skillLineID, true
+        end
+    end
+
+    return nil, nil
+end
+
+local function printExpansionTrainingHint(expansionName)
+    if type(expansionName) ~= "string" or expansionName == "" then
+        return
+    end
+
+    print("|cffff9933ProfessionUI:|r " .. tostring(getDisplayExpansionName(expansionName)) .. " isn't unlocked for this profession yet. Train this expansion first.")
 end
 
 local function isArchaeologyContext(activeContext)
@@ -550,15 +716,18 @@ local function switchProfessionSkillLine(skillLineID, isChildSkillLine)
     end
 
     if isChildSkillLine and C_TradeSkillUI and C_TradeSkillUI.SetProfessionChildSkillLineID then
-        local switched = pcall(C_TradeSkillUI.SetProfessionChildSkillLineID, skillLineID)
-        if switched then
-            local pf = _G.ProfessionsFrame
-            if pf and type(pf.SetProfessionInfo) == "function" and _G.Professions and type(_G.Professions.GetProfessionInfo) == "function" then
-                local professionInfo = _G.Professions.GetProfessionInfo()
-                local useLastSkillLine = false
-                pcall(pf.SetProfessionInfo, pf, professionInfo, useLastSkillLine)
+        local ok = pcall(C_TradeSkillUI.SetProfessionChildSkillLineID, skillLineID)
+        if ok then
+            local activeChild = C_TradeSkillUI.GetProfessionChildSkillLineID and C_TradeSkillUI.GetProfessionChildSkillLineID() or nil
+            if type(activeChild) == "number" and activeChild == skillLineID then
+                local pf = _G.ProfessionsFrame
+                if pf and type(pf.SetProfessionInfo) == "function" and _G.Professions and type(_G.Professions.GetProfessionInfo) == "function" then
+                    local professionInfo = _G.Professions.GetProfessionInfo()
+                    local useLastSkillLine = false
+                    pcall(pf.SetProfessionInfo, pf, professionInfo, useLastSkillLine)
+                end
+                return true
             end
-            return true
         end
     end
 
@@ -606,7 +775,6 @@ local function openArchaeologyInProfessionsUI()
     if _G.ArchaeologyFrame and _G.ArchaeologyFrame.IsShown and _G.ArchaeologyFrame:IsShown() then
         _G.ArchaeologyFrame:Hide()
     end
-    ui.pinAppliedForProfessionID = nil
     C_Timer.After(0, refreshSideTabs)
 
     return true
@@ -741,8 +909,8 @@ local function acquireProfessionButton(index)
         edgeSize = 10,
         insets = { left = 2, right = 2, top = 2, bottom = 2 },
     })
-    btn:SetBackdropColor(0.16, 0.10, 0.10, 0.90)
-    btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
+    btn:SetBackdropColor(unpack(THEME.switcherBg))
+    btn:SetBackdropBorderColor(unpack(THEME.switcherBorder))
     btn.icon = btn:CreateTexture(nil, "ARTWORK")
     btn.icon:SetSize(PROF_SWITCHER_ICON_SIZE, PROF_SWITCHER_ICON_SIZE)
     btn.icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
@@ -752,7 +920,7 @@ local function acquireProfessionButton(index)
     btn.activeGlow:SetBlendMode("ADD")
     btn.activeGlow:SetPoint("TOPLEFT", btn, "TOPLEFT", -3, 3)
     btn.activeGlow:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", 3, -3)
-    btn.activeGlow:SetVertexColor(1.0, 0.92, 0.55, 0.8)
+    btn.activeGlow:SetVertexColor(unpack(THEME.activeGlow))
     btn.activeGlow:SetAlpha(0.38)
     btn.activeGlow:Hide()
     btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -765,7 +933,6 @@ local function acquireProfessionButton(index)
         if not self.skillLineID then
             return
         end
-        ui.pinAppliedForProfessionID = nil
         switchProfessionSkillLine(self.skillLineID, false)
         C_Timer.After(0, refreshSideTabs)
     end)
@@ -847,15 +1014,15 @@ local function refreshProfessionSwitcher(activeContext)
         end
 
         if isActive then
-            btn:SetBackdropColor(0.29, 0.18, 0.14, 0.96)
-            btn:SetBackdropBorderColor(0.78, 0.58, 0.18, 0.95)
+            btn:SetBackdropColor(unpack(THEME.switcherActiveBg))
+            btn:SetBackdropBorderColor(unpack(THEME.switcherActiveBorder))
             btn.activeGlow:Show()
-            btn.text:SetTextColor(1, 0.92, 0.35)
+            btn.text:SetTextColor(unpack(THEME.rowSelectedText))
         else
-            btn:SetBackdropColor(0.16, 0.10, 0.10, 0.90)
-            btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
+            btn:SetBackdropColor(unpack(THEME.switcherBg))
+            btn:SetBackdropBorderColor(unpack(THEME.switcherBorder))
             btn.activeGlow:Hide()
-            btn.text:SetTextColor(0.95, 0.95, 0.95)
+            btn.text:SetTextColor(unpack(THEME.rowText))
         end
     end
 
@@ -891,10 +1058,10 @@ local function acquireTab(index)
         edgeSize = 10,
         insets = { left = 2, right = 2, top = 2, bottom = 2 },
     })
-    btn:SetBackdropColor(0.17, 0.10, 0.10, 0.86)
-    btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
+    btn:SetBackdropColor(unpack(THEME.rowOddBg))
+    btn:SetBackdropBorderColor(unpack(THEME.rowBorder))
     btn.leftAccent = btn:CreateTexture(nil, "ARTWORK")
-    btn.leftAccent:SetColorTexture(0.88, 0.72, 0.24, 0.95)
+    btn.leftAccent:SetColorTexture(unpack(THEME.rowSelectedAccent))
     btn.leftAccent:SetPoint("TOPLEFT", btn, "TOPLEFT", 3, -3)
     btn.leftAccent:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 3, 3)
     btn.leftAccent:SetWidth(2)
@@ -904,33 +1071,50 @@ local function acquireTab(index)
     btn.pinBtn:SetPoint("LEFT", btn, "LEFT", 7, 0)
     btn.pinBtn.bg = btn.pinBtn:CreateTexture(nil, "BACKGROUND")
     btn.pinBtn.bg:SetAllPoints(btn.pinBtn)
-    btn.pinBtn.bg:SetColorTexture(0.12, 0.08, 0.08, 0.95)
+    btn.pinBtn.bg:SetColorTexture(unpack(THEME.pinBg))
     btn.pinBtn.border = btn.pinBtn:CreateTexture(nil, "BORDER")
     btn.pinBtn.border:SetAllPoints(btn.pinBtn)
-    btn.pinBtn.border:SetColorTexture(0.48, 0.34, 0.20, 0.55)
+    btn.pinBtn.border:SetColorTexture(unpack(THEME.pinBorder))
     btn.pinBtn.icon = btn.pinBtn:CreateTexture(nil, "OVERLAY")
     btn.pinBtn.icon:SetAllPoints(btn.pinBtn)
     btn.pinBtn.icon:SetTexture(PIN_ICON_UNLOCKED)
-    btn.pinBtn.icon:SetVertexColor(0.88, 0.88, 0.88, 0.95)
+    btn.pinBtn.icon:SetVertexColor(unpack(THEME.pinIcon))
     btn.pinBtn:SetScript("OnClick", function(pinButton)
         local owner = pinButton:GetParent()
-        if not owner or not owner.baseProfessionID or not owner.expansionName then
+        if not owner or not owner.expansionName then
             return
         end
 
         if owner.isPinned then
-            clearPinnedExpansion(owner.baseProfessionID)
-            print("|cff33ff99ProfessionUI:|r Unpinned " .. tostring(owner.expansionName))
+            clearPinnedExpansion()
+            print("|cff33ff99ProfessionUI:|r Unpinned " .. tostring(getDisplayExpansionName(owner.expansionName)))
         else
-            setPinnedExpansion(owner.baseProfessionID, owner.expansionName)
+            setPinnedExpansion(owner.expansionName)
             setLastSelectedExpansion(owner.expansionName)
-            print("|cff33ff99ProfessionUI:|r Pinned " .. tostring(owner.expansionName) .. " for this profession")
+            print("|cff33ff99ProfessionUI:|r Pinned " .. tostring(getDisplayExpansionName(owner.expansionName)) .. " for all professions")
         end
-        ui.pinAppliedForProfessionID = nil
         C_Timer.After(0, refreshSideTabs)
     end)
-    btn.pinBtn:SetScript("OnEnter", nil)
-    btn.pinBtn:SetScript("OnLeave", nil)
+    btn.pinBtn:SetScript("OnEnter", function(pinButton)
+        local owner = pinButton:GetParent()
+        local expansionName = owner and owner.expansionName or ""
+        local isPinned = owner and owner.isPinned == true
+
+        GameTooltip:SetOwner(pinButton, "ANCHOR_RIGHT")
+        if isPinned then
+            GameTooltip:SetText("Unpin expansion", 1, 0.93, 0.45)
+        else
+            GameTooltip:SetText("Pin expansion", 1, 0.93, 0.45)
+        end
+        if expansionName ~= "" then
+            GameTooltip:AddLine(tostring(getDisplayExpansionName(expansionName)), 0.82, 0.82, 0.82)
+        end
+        GameTooltip:AddLine("Pinned expansion applies to all professions", 0.72, 0.72, 0.72, true)
+        GameTooltip:Show()
+    end)
+    btn.pinBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
     btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     btn.label:SetPoint("LEFT", btn, "LEFT", 32, 0)
     btn.label:SetPoint("RIGHT", btn, "RIGHT", -62, 0)
@@ -952,37 +1136,53 @@ local function acquireTab(index)
             return
         end
 
-        if self.isUnavailableExpansion then
-            return
+        if not self.skillLineID then
+            local resolvedSkillLineID, resolvedIsChild = resolveSkillLineForExpansion(self.expansionName, self.baseProfessionID)
+            if type(resolvedSkillLineID) == "number" then
+                self.skillLineID = resolvedSkillLineID
+                self.isChildSkillLine = resolvedIsChild == true
+            end
         end
 
         if not self.skillLineID then
+            printExpansionTrainingHint(self.expansionName)
             return
+        end
+
+        local warnedUntrained = false
+        local expansionRank = tonumber(self.expansionRank) or 0
+        local expansionMaxRank = tonumber(self.expansionMaxRank) or 0
+        if self.expansionName and (expansionMaxRank == 0 or expansionRank == 0) then
+            printExpansionTrainingHint(self.expansionName)
+            warnedUntrained = true
         end
 
         if self.expansionName then
             setLastSelectedExpansion(self.expansionName)
         end
 
-        switchProfessionSkillLine(self.skillLineID, self.isChildSkillLine == true)
+        local switched = switchProfessionSkillLine(self.skillLineID, self.isChildSkillLine == true)
+        if not switched and not warnedUntrained then
+            printExpansionTrainingHint(self.expansionName)
+        end
 
         C_Timer.After(0, refreshSideTabs)
     end)
 
     btn:SetScript("OnEnter", function(self)
         if not self.isSelected then
-            self:SetBackdropColor(0.24, 0.14, 0.14, 0.92)
+            self:SetBackdropColor(unpack(THEME.rowHoverBg))
         end
     end)
 
     btn:SetScript("OnLeave", function(self)
         if self.isSelected then
-            self:SetBackdropColor(0.29, 0.18, 0.14, 0.96)
+            self:SetBackdropColor(unpack(THEME.rowSelectedBg))
         else
             if self.isEvenRow then
-                self:SetBackdropColor(0.19, 0.12, 0.12, 0.86)
+                self:SetBackdropColor(unpack(THEME.rowEvenBg))
             else
-                self:SetBackdropColor(0.16, 0.10, 0.10, 0.86)
+                self:SetBackdropColor(unpack(THEME.rowOddBg))
             end
         end
     end)
@@ -1041,7 +1241,7 @@ local function setPanelAttachment(anchorFrame, attachLeft)
             ui.joinSeam:SetWidth(1)
         end
     else
-        local rightGap = 0
+        local rightGap = -1
         if anchorFrame == _G.ArchaeologyFrame then
             -- Keep clear of archaeology's protruding right-side ornament/buttons.
             rightGap = 12
@@ -1099,43 +1299,58 @@ local function ensurePanel(anchorFrame, attachLeft)
         edgeSize = 14,
         insets = { left = 3, right = 3, top = 3, bottom = 3 },
     })
-    panel:SetBackdropColor(0.09, 0.08, 0.07, 0.94)
-    panel:SetBackdropBorderColor(0.45, 0.38, 0.26, 0.95)
+    panel:SetBackdropColor(unpack(THEME.panelBg))
+    panel:SetBackdropBorderColor(unpack(THEME.panelBorder))
 
     local headerBar = panel:CreateTexture(nil, "ARTWORK")
-    headerBar:SetColorTexture(0.18, 0.14, 0.09, 0.92)
+    headerBar:SetColorTexture(unpack(THEME.headerBg))
     headerBar:SetPoint("TOPLEFT", panel, "TOPLEFT", 3, -3)
     headerBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -3, -3)
-    headerBar:SetHeight(36)
+    headerBar:SetHeight(31)
 
     local title = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    title:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -9)
-    title:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -10, -10)
+    title:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -8)
+    title:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -34, -10)
     title:SetJustifyH("LEFT")
     title:SetText("Expansions")
 
     local subtitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
-    subtitle:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -10, -12)
+    subtitle:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -34, -12)
     subtitle:SetJustifyH("LEFT")
-    subtitle:SetText("Click lock icon to pin")
-    subtitle:SetTextColor(0.78, 0.78, 0.68)
+    subtitle:SetText("")
+    subtitle:SetTextColor(0.82, 0.82, 0.82)
+
+    local archaeologyNotice = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    archaeologyNotice:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 10, 8)
+    archaeologyNotice:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -10, 8)
+    archaeologyNotice:SetJustifyH("CENTER")
+    archaeologyNotice:SetTextColor(1.0, 0.82, 0.42)
+    archaeologyNotice:SetText("In progress: Archaeology is not fully functional yet")
+    archaeologyNotice:Hide()
+
+    local closeButton = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
+    closeButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -2, -2)
+    closeButton:SetScript("OnClick", function()
+        ui.hideUntilNextTradeSkillOpen = true
+        panel:Hide()
+    end)
 
     -- Seam lines to visually attach this panel to the default professions frame.
     local joinSeam = panel:CreateTexture(nil, "BORDER")
-    joinSeam:SetColorTexture(0.56, 0.46, 0.30, 0.65)
+    joinSeam:SetColorTexture(unpack(THEME.seamStrong))
     joinSeam:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -1)
     joinSeam:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 0, 1)
     joinSeam:SetWidth(1)
 
     local topSeam = panel:CreateTexture(nil, "BORDER")
-    topSeam:SetColorTexture(0.56, 0.46, 0.30, 0.45)
+    topSeam:SetColorTexture(unpack(THEME.seamSoft))
     topSeam:SetPoint("TOPLEFT", panel, "TOPLEFT", 1, 0)
     topSeam:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -1, 0)
     topSeam:SetHeight(1)
 
     local bottomSeam = panel:CreateTexture(nil, "BORDER")
-    bottomSeam:SetColorTexture(0.56, 0.46, 0.30, 0.45)
+    bottomSeam:SetColorTexture(unpack(THEME.seamSoft))
     bottomSeam:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 1, 0)
     bottomSeam:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -1, 0)
     bottomSeam:SetHeight(1)
@@ -1161,6 +1376,7 @@ local function ensurePanel(anchorFrame, attachLeft)
     ui.panel = panel
     ui.title = title
     ui.subtitle = subtitle
+    ui.archaeologyNotice = archaeologyNotice
     ui.joinSeam = joinSeam
     ui.topSeam = topSeam
     ui.bottomSeam = bottomSeam
@@ -1176,6 +1392,11 @@ refreshSideTabs = function()
     local anchorFrame, anchorIsArchaeology = getActiveAnchorFrame()
     local panel = ensurePanel(anchorFrame, anchorIsArchaeology)
     if not panel then
+        return
+    end
+
+    if ui.hideUntilNextTradeSkillOpen then
+        panel:Hide()
         return
     end
 
@@ -1200,36 +1421,63 @@ refreshSideTabs = function()
 
     if archaeologyMode then
         ui.title:SetText("Archaeology Races")
-        ui.subtitle:SetText("Solve-ready races are highlighted")
-        ui.pinAppliedForProfessionID = nil
+        ui.subtitle:SetText("In progress: Archaeology view is not fully functional yet")
+        if ui.archaeologyNotice then
+            ui.archaeologyNotice:Show()
+        end
     else
         ui.title:SetText("Expansions")
-        ui.subtitle:SetText("Click lock icon to pin")
+        ui.subtitle:SetText("")
+        if ui.archaeologyNotice then
+            ui.archaeologyNotice:Hide()
+        end
     end
 
-    local pinnedExpansion = archaeologyMode and nil or getPinnedExpansion(activeProfessionID)
-    local desiredExpansion = archaeologyMode and nil or (pinnedExpansion or getLastSelectedExpansion())
-    if not archaeologyMode and desiredExpansion then
+    local pinProfessionID = activeProfessionID
+    if not archaeologyMode then
         for _, entry in ipairs(entries) do
-            if entry.expansionName == desiredExpansion then
-                local canSwitchToEntry = (entry.isPlaceholder ~= true and entry.isFallback ~= true and type(entry.skillLineID) == "number")
-                if canSwitchToEntry and currentChildSkillLineID ~= entry.skillLineID then
-                    switchProfessionSkillLine(entry.skillLineID, entry.isChildSkillLine == true)
-                    ui.pinAppliedForProfessionID = activeProfessionID
-                    C_Timer.After(0, refreshSideTabs)
-                    return
-                end
+            if type(entry.professionID) == "number" then
+                pinProfessionID = entry.professionID
+                break
             end
         end
     end
 
-    if archaeologyMode then
-        ui.pinAppliedForProfessionID = nil
+    local pinnedExpansion = archaeologyMode and nil or getPinnedExpansion()
+    local desiredExpansion = archaeologyMode and nil or (pinnedExpansion or getLastSelectedExpansion())
+    if not archaeologyMode and desiredExpansion then
+        for _, entry in ipairs(entries) do
+            if entry.expansionName == desiredExpansion then
+                local canSwitchToEntry = (entry.isPlaceholder ~= true and type(entry.skillLineID) == "number")
+                if canSwitchToEntry and currentChildSkillLineID ~= entry.skillLineID then
+                    local retryKey = tostring(pinProfessionID or "?") .. ":" .. tostring(desiredExpansion)
+                    if ui.pinAutoSwitchRetryKey ~= retryKey then
+                        ui.pinAutoSwitchRetryKey = retryKey
+                        ui.pinAutoSwitchRetryCount = 0
+                    end
+
+                    ui.pinAutoSwitchRetryCount = (ui.pinAutoSwitchRetryCount or 0) + 1
+                    local switched = switchProfessionSkillLine(entry.skillLineID, entry.isChildSkillLine == true)
+                    C_Timer.After(0, refreshSideTabs)
+
+                    if not switched and ui.pinAutoSwitchRetryCount < 4 then
+                        C_Timer.After(0.10, refreshSideTabs)
+                    elseif switched then
+                        ui.pinAutoSwitchRetryKey = nil
+                        ui.pinAutoSwitchRetryCount = 0
+                    end
+                    return
+                end
+
+                ui.pinAutoSwitchRetryKey = nil
+                ui.pinAutoSwitchRetryCount = 0
+            end
+        end
     end
 
     local switcherHeight = refreshProfessionSwitcher(activeContext)
     local listTop = -48 - switcherHeight - 8
-    local listBottom = 10
+    local listBottom = archaeologyMode and 28 or 10
 
     if ui.tabScroll then
         ui.tabScroll:ClearAllPoints()
@@ -1274,7 +1522,7 @@ refreshSideTabs = function()
         btn:SetPoint("TOPLEFT", ui.tabContent or panel, "TOPLEFT", x, rowY)
         btn:SetWidth(rowWidth)
 
-        local label = entry.expansionName
+        local label = getDisplayExpansionName(entry.expansionName)
         local rankLabel = ""
         if archaeologyMode then
             rankLabel = entry.rankLabel or ""
@@ -1286,9 +1534,11 @@ refreshSideTabs = function()
         btn.rankText:SetText(rankLabel)
         btn.skillLineID = archaeologyMode and nil or entry.skillLineID
         btn.isChildSkillLine = archaeologyMode and false or (entry.isChildSkillLine == true)
-        btn.isUnavailableExpansion = (not archaeologyMode) and (entry.isPlaceholder == true or entry.isFallback == true)
+        btn.expansionRank = archaeologyMode and nil or (tonumber(entry.rank) or 0)
+        btn.expansionMaxRank = archaeologyMode and nil or (tonumber(entry.maxRank) or 0)
+        btn.isUnavailableExpansion = false
         btn.expansionName = entry.expansionName
-        btn.baseProfessionID = activeProfessionID
+        btn.baseProfessionID = pinProfessionID
         btn.isPinned = archaeologyMode and false or isPinned
         btn.isArchaeologyRace = archaeologyMode and entry.isArchaeologyRace == true
         btn.raceIndex = archaeologyMode and entry.raceIndex or nil
@@ -1296,11 +1546,6 @@ refreshSideTabs = function()
         btn.isEvenRow = (i % 2 == 0)
 
         if archaeologyMode then
-            btn.pinBtn:Hide()
-            btn.pinBtn:Disable()
-            btn.label:SetPoint("LEFT", btn, "LEFT", 12, 0)
-            btn.label:SetPoint("RIGHT", btn, "RIGHT", -62, 0)
-        elseif btn.isUnavailableExpansion then
             btn.pinBtn:Hide()
             btn.pinBtn:Disable()
             btn.label:SetPoint("LEFT", btn, "LEFT", 12, 0)
@@ -1323,49 +1568,35 @@ refreshSideTabs = function()
             btn.leftAccent:Show()
             btn.leftAccent:SetColorTexture(0.45, 0.95, 0.45, 0.95)
         elseif isSelected then
-            btn.label:SetTextColor(1, 0.92, 0.35)
-            btn.rankText:SetTextColor(1, 0.92, 0.35)
-            btn:SetBackdropColor(0.29, 0.18, 0.14, 0.96)
-            btn:SetBackdropBorderColor(0.78, 0.58, 0.18, 0.95)
+            btn.label:SetTextColor(unpack(THEME.rowSelectedText))
+            btn.rankText:SetTextColor(unpack(THEME.rowSelectedText))
+            btn:SetBackdropColor(unpack(THEME.rowSelectedBg))
+            btn:SetBackdropBorderColor(unpack(THEME.rowSelectedBorder))
             btn.leftAccent:Show()
-            btn.leftAccent:SetColorTexture(0.88, 0.72, 0.24, 0.95)
-        elseif btn.isUnavailableExpansion then
-            btn.label:SetTextColor(0.66, 0.66, 0.66)
-            btn.rankText:SetTextColor(0.56, 0.56, 0.56)
-            if btn.isEvenRow then
-                btn:SetBackdropColor(0.15, 0.10, 0.10, 0.82)
-            else
-                btn:SetBackdropColor(0.13, 0.09, 0.09, 0.82)
-            end
-            btn:SetBackdropBorderColor(0.34, 0.20, 0.20, 0.90)
-            btn.leftAccent:Hide()
+            btn.leftAccent:SetColorTexture(unpack(THEME.rowSelectedAccent))
         else
-            btn.label:SetTextColor(0.95, 0.95, 0.95)
-            btn.rankText:SetTextColor(0.86, 0.86, 0.86)
+            btn.label:SetTextColor(unpack(THEME.rowText))
+            btn.rankText:SetTextColor(unpack(THEME.rowSubText))
             if btn.isEvenRow then
-                btn:SetBackdropColor(0.19, 0.12, 0.12, 0.86)
+                btn:SetBackdropColor(unpack(THEME.rowEvenBg))
             else
-                btn:SetBackdropColor(0.16, 0.10, 0.10, 0.86)
+                btn:SetBackdropColor(unpack(THEME.rowOddBg))
             end
-            btn:SetBackdropBorderColor(0.42, 0.24, 0.24, 0.95)
+            btn:SetBackdropBorderColor(unpack(THEME.rowBorder))
             btn.leftAccent:Hide()
         end
         if archaeologyMode then
-            btn.pinBtn.icon:SetVertexColor(0.88, 0.88, 0.88, 0.95)
-            btn.pinBtn.bg:SetColorTexture(0.12, 0.08, 0.08, 0.95)
-            btn.pinBtn.border:SetColorTexture(0.48, 0.34, 0.20, 0.55)
-        elseif btn.isUnavailableExpansion then
-            btn.pinBtn.icon:SetVertexColor(0.68, 0.68, 0.68, 0.85)
-            btn.pinBtn.bg:SetColorTexture(0.10, 0.07, 0.07, 0.90)
-            btn.pinBtn.border:SetColorTexture(0.36, 0.26, 0.16, 0.40)
+            btn.pinBtn.icon:SetVertexColor(unpack(THEME.pinIcon))
+            btn.pinBtn.bg:SetColorTexture(unpack(THEME.pinBg))
+            btn.pinBtn.border:SetColorTexture(unpack(THEME.pinBorder))
         elseif isPinned then
-            btn.pinBtn.icon:SetVertexColor(1, 0.92, 0.35, 1)
-            btn.pinBtn.bg:SetColorTexture(0.18, 0.14, 0.08, 0.98)
-            btn.pinBtn.border:SetColorTexture(0.82, 0.64, 0.22, 0.80)
+            btn.pinBtn.icon:SetVertexColor(unpack(THEME.pinPinnedIcon))
+            btn.pinBtn.bg:SetColorTexture(unpack(THEME.pinPinnedBg))
+            btn.pinBtn.border:SetColorTexture(unpack(THEME.pinPinnedBorder))
         else
-            btn.pinBtn.icon:SetVertexColor(0.88, 0.88, 0.88, 0.95)
-            btn.pinBtn.bg:SetColorTexture(0.12, 0.08, 0.08, 0.95)
-            btn.pinBtn.border:SetColorTexture(0.48, 0.34, 0.20, 0.55)
+            btn.pinBtn.icon:SetVertexColor(unpack(THEME.pinIcon))
+            btn.pinBtn.bg:SetColorTexture(unpack(THEME.pinBg))
+            btn.pinBtn.border:SetColorTexture(unpack(THEME.pinBorder))
         end
 
     end
@@ -1446,7 +1677,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     end
 
     if event == "TRADE_SKILL_SHOW" then
-        ui.pinAppliedForProfessionID = nil
+        ui.hideUntilNextTradeSkillOpen = false
     end
 
     C_Timer.After(0, refreshSideTabs)
@@ -1460,13 +1691,12 @@ SlashCmdList["PROFESSIONUIPINS"] = function(msg)
         print("|cff33ff99ProfessionUI pins:|r")
         print("  /puipins clear      - Clear all saved expansion pins")
         print("  /puiclearpins       - Alias for /puipins clear")
-        print("  Tip: Click the lock icon on an expansion row to pin/unpin it")
+        print("  Tip: Click the pin toggle on an expansion row to pin/unpin it")
         return
     end
 
     if arg == "clear" then
         local removed = clearAllPinnedExpansions()
-        ui.pinAppliedForProfessionID = nil
         C_Timer.After(0, refreshSideTabs)
         print("|cff33ff99ProfessionUI:|r Cleared " .. tostring(removed) .. " saved pin(s).")
         return

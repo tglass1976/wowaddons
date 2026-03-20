@@ -59,6 +59,28 @@ addon.expansionAliases = {
     ["Classic"] = "Classic",
 }
 
+addon.expansionDisplayNames = {
+    ["Midnight"] = "Midnight",
+    ["Khaz Algar"] = "The War Within",
+    ["Dragon Isles"] = "Dragonflight",
+    ["Shadowlands"] = "Shadowlands",
+    ["Battle for Azeroth"] = "Battle for Azeroth",
+    ["Legion"] = "Legion",
+    ["Draenor"] = "Warlords of Draenor",
+    ["Pandaria"] = "Mists of Pandaria",
+    ["Cataclysm"] = "Cataclysm",
+    ["Northrend"] = "Wrath of the Lich King",
+    ["Outland"] = "The Burning Crusade",
+    ["Classic"] = "Classic",
+}
+
+function addon.GetExpansionDisplayName(name)
+    if type(name) ~= "string" or name == "" then
+        return name
+    end
+    return addon.expansionDisplayNames[name] or name
+end
+
 addon.state = {
     professions = {},
     selectedProfession = 1,

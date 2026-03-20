@@ -52,3 +52,38 @@ Use these sources for addon runtime APIs, events, frames, and UI behavior.
 
 - `BankMatsViewer` and `ProfessionUI` are separate addon projects.
 - Keep changes scoped to one addon unless a cross-addon change is intentional.
+
+## Release Packaging (One Command)
+
+Use the repo script to build clean release zips for both addons:
+
+```powershell
+Set-Location c:\projects\wowaddons
+.\package-release.ps1
+```
+
+Optional flags:
+
+```powershell
+# Put zips in a custom folder
+.\package-release.ps1 -OutputDir dist
+
+# Add version suffix to zip names
+.\package-release.ps1 -Version 1.2.3
+
+# Keep README.md files in zips
+.\package-release.ps1 -IncludeReadme
+
+# Show validation details while packaging
+.\package-release.ps1 -VerboseValidation
+
+# Skip zip validation checks (not recommended for release)
+.\package-release.ps1 -SkipValidation
+```
+
+Default behavior:
+
+- Builds one zip per addon: `BankMatsViewer.zip` and `ProfessionUI.zip`.
+- Excludes markdown/dev docs from addon folders by default.
+- Keeps addon folder root in each zip so they can be dropped directly into `Interface\AddOns`.
+- Validates each zip before success: addon root present, at least one `.toc`, no markdown except optional `README.md`.
